@@ -152,12 +152,23 @@ button:disabled{opacity:0.4;cursor:default}
   #zoom-btns button{width:46px;height:46px;font-size:22px;padding:0}
   button{padding:7px 11px;font-size:13px}
 }
+.an-tab{background:#0a0a12;color:#666;cursor:pointer}
+.an-tab.on{background:#0f0f1e;color:#ccc;font-weight:500}
+.an-tab:hover{background:#141422;color:#ccc}
+.an-row{display:flex;align-items:center;gap:8px;padding:7px 18px;border-bottom:1px solid #0f0f18;font-size:12px;cursor:pointer}
+.an-row:hover{background:#141422}
+.an-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc}
+.an-name.me{color:#9d8fff}
+.an-delta{font-weight:500;min-width:44px;text-align:right}
+.an-bar-wrap{width:70px;height:4px;background:#1a1a2a;border-radius:2px;flex-shrink:0}
+.an-bar{height:4px;border-radius:2px}
+.an-tiles{color:#555;font-size:11px;min-width:50px;text-align:right}
 </style>
 </head>
 <body>
 
 <div id="toolbar">
-  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.6</span>
+  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.7</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -178,6 +189,7 @@ button:disabled{opacity:0.4;cursor:default}
   <input type="range" id="tl-slider" min="0" value="0" step="1" oninput="onSliderInput(this.value)">
   <span id="tl-info">—</span>
   <span id="tl-count">— snapshots</span>
+  <button id="analyse-btn" onclick="openAnalysis()" style="font-size:11px;padding:3px 10px;border-color:#378ADD;color:#378ADD;display:none">📊 Analyse</button>
 </div>
 
 <div id="main">
@@ -241,6 +253,52 @@ button:disabled{opacity:0.4;cursor:default}
   <div id="neighbor-list"></div>
 </div>
 
+<!-- Analysis modal -->
+<div id="analysis-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:#0f0f1e;border:1px solid #2a2a4e;border-radius:12px;width:100%;max-width:600px;overflow:hidden;margin:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1e1e2e;background:#0a0a14">
+      <div>
+        <div style="font-size:14px;font-weight:500;color:#fff">📊 Snapshot analysis</div>
+        <div id="analysis-subtitle" style="font-size:11px;color:#555;margin-top:2px">—</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="analysis-map-btn" onclick="toggleAnalysisOverlay()" style="font-size:11px;padding:4px 10px">🗺 Show on map</button>
+        <button onclick="closeAnalysis()" style="background:transparent;border:none;color:#555;font-size:18px;cursor:pointer;padding:0;line-height:1">✕</button>
+      </div>
+    </div>
+    <!-- Summary stats -->
+    <div style="display:flex;gap:0;border-bottom:1px solid #1e1e2e">
+      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e1e2e">
+        <div style="font-size:20px;font-weight:500;color:#1D9E75" id="an-gained-total">—</div>
+        <div style="font-size:11px;color:#555">tiles captured</div>
+      </div>
+      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e1e2e">
+        <div style="font-size:20px;font-weight:500;color:#E24B4A" id="an-lost-total">—</div>
+        <div style="font-size:11px;color:#555">tiles lost</div>
+      </div>
+      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e1e2e">
+        <div style="font-size:20px;font-weight:500;color:#FAC775" id="an-active">—</div>
+        <div style="font-size:11px;color:#555">active players</div>
+      </div>
+      <div style="flex:1;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:500;color:#888" id="an-unchanged">—</div>
+        <div style="font-size:11px;color:#555">tiles changed</div>
+      </div>
+    </div>
+    <!-- Filter tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid #1e1e2e;background:#0a0a12">
+      <button class="an-tab on" onclick="setAnTab('all',this)" style="flex:1;border-radius:0;border:none;border-right:1px solid #1e1e2e;padding:7px;font-size:11px">All movers</button>
+      <button class="an-tab" onclick="setAnTab('gainers',this)" style="flex:1;border-radius:0;border:none;border-right:1px solid #1e1e2e;padding:7px;font-size:11px;color:#1D9E75">▲ Gainers</button>
+      <button class="an-tab" onclick="setAnTab('losers',this)" style="flex:1;border-radius:0;border:none;padding:7px;font-size:11px;color:#E24B4A">▼ Losers</button>
+    </div>
+    <!-- Player list -->
+    <div id="analysis-list" style="max-height:50vh;overflow-y:auto;padding:8px 0"></div>
+    <div style="padding:10px 18px;border-top:1px solid #1e1e2e;font-size:11px;color:#444">
+      Comparing: <span id="an-from-label" style="color:#666">—</span> → <span id="an-to-label" style="color:#666">—</span>
+    </div>
+  </div>
+</div>
+
 <!-- Refresh modal -->
 <div id="refresh-modal">
   <div id="refresh-box">
@@ -295,6 +353,7 @@ async function loadHistory(){
       slider.max=snapshots.length-1;
       slider.value=0;
       document.getElementById('tl-count').textContent=`${snapshots.length} snapshots`;
+      document.getElementById('analyse-btn').style.display='';
       updateTimelineLabel(0);
     }
   }catch(e){}
@@ -650,7 +709,31 @@ function drawMap(){
     ctx.textAlign='left';ctx.textBaseline='top';
     ctx.fillText('📅 '+document.getElementById('tl-info').textContent,8,8);
   }
-}
+  // Analysis overlay
+  if(analysisOverlay&&analysisData){
+    for(const ch of analysisData.changedTiles){
+      if(ch.x<wx0||ch.x>wx1||ch.y<wy0||ch.y>wy1) continue;
+      const sx=(ch.x-minX)*cs+panX,sy=(maxY-ch.y)*cs+panY;
+      const col=ch.type==='new'?'rgba(250,199,117,0.85)':
+                ch.type==='abandoned'?'rgba(120,120,120,0.6)':
+                (ch.toPid&&MY_IDS.has(ch.toPid))?'rgba(29,158,117,0.9)':
+                (ch.fromPid&&MY_IDS.has(ch.fromPid))?'rgba(226,75,74,0.9)':
+                ch.toPid?'rgba(29,158,117,0.65)':'rgba(226,75,74,0.65)';
+      ctx.fillStyle=col;ctx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
+      ctx.strokeStyle=col.replace(/[\d.]+\)$/,'1)');ctx.lineWidth=1;
+      ctx.strokeRect(sx+1,sy+1,cs-2,cs-2);
+    }
+    // Legend bottom-left
+    ctx.font='11px sans-serif';ctx.textBaseline='bottom';
+    const leg=[['#1D9E75','Captured'],['#E24B4A','Lost'],['#FAC775','New']];
+    let lx=8,ly=H-8;
+    for(const [col,lbl] of leg){
+      ctx.fillStyle=col;ctx.fillRect(lx,ly-12,12,12);
+      ctx.fillStyle='rgba(255,255,255,0.75)';ctx.textAlign='left';
+      ctx.fillText(lbl,lx+16,ly);
+      lx+=ctx.measureText(lbl).width+34;
+    }
+  }
 
 function drawMinimap(){
   const mc=document.getElementById('minimap-canvas');
@@ -1036,6 +1119,168 @@ document.addEventListener('click',e=>{
   const popup=document.getElementById('neighbor-popup');
   if(popup.style.display!=='none'&&!popup.contains(e.target))closeNeighborPopup();
 });
+
+// ── SNAPSHOT ANALYSIS ────────────────────────────────────────────────────────
+let analysisData = null;   // {changes, snapA, snapB}
+let analysisFilter = 'all';
+let analysisOverlay = false;
+
+async function openAnalysis(){
+  if(snapshots.length < 2){
+    alert('Need at least 2 snapshots to compare.');
+    return;
+  }
+  const modal = document.getElementById('analysis-modal');
+  modal.style.display = 'flex';
+  document.getElementById('analysis-list').innerHTML =
+    '<div style="padding:2rem;text-align:center;color:#555;font-size:12px">Loading snapshots...</div>';
+
+  try{
+    // Always compare the two most recent snapshots
+    const snapA = snapshots[1]; // second newest = older
+    const snapB = snapshots[0]; // newest
+
+    document.getElementById('an-from-label').textContent = snapA.label || '—';
+    document.getElementById('an-to-label').textContent   = snapB.label || '—';
+    document.getElementById('analysis-subtitle').textContent =
+      `${snapA.label} → ${snapB.label}`;
+
+    const [dA, dB] = await Promise.all([
+      fetch(snapA.file+'?t='+Date.now()).then(r=>r.json()),
+      fetch(snapB.file+'?t='+Date.now()).then(r=>r.json()),
+    ]);
+
+    // Build tile ownership maps: "x,y" → pid
+    function tileOwnerMap(d){
+      const m = new Map();
+      for(const t of (d.tiles||[])){
+        const p = d.players[t.p];
+        if(p) m.set(`${t.x},${t.y}`, {pid:p.pid, name:p.name, color:p.color});
+      }
+      return m;
+    }
+    const mapA = tileOwnerMap(dA);
+    const mapB = tileOwnerMap(dB);
+
+    // Build pid → name/color lookup from both snapshots
+    const pidInfo = new Map();
+    for(const p of [...(dA.players||[]), ...(dB.players||[])]){
+      if(!pidInfo.has(p.pid)) pidInfo.set(p.pid, {name:p.name||'', color:p.color});
+    }
+
+    // Tile-level changes
+    const changedTiles = []; // {x, y, fromPid, toPid, type}
+    const allKeys = new Set([...mapA.keys(), ...mapB.keys()]);
+
+    for(const key of allKeys){
+      const a = mapA.get(key);
+      const b = mapB.get(key);
+      const fromPid = a?.pid || null;
+      const toPid   = b?.pid || null;
+      if(fromPid === toPid) continue;
+      const [x,y] = key.split(',').map(Number);
+      let type;
+      if(!fromPid)      type='new';       // empty → owned
+      else if(!toPid)   type='abandoned'; // owned → empty
+      else              type='captured';  // A → B
+      changedTiles.push({x,y,fromPid,toPid,type});
+    }
+
+    // Aggregate per player
+    const playerChanges = new Map(); // pid → {gained, lost, name, color}
+    for(const ch of changedTiles){
+      if(ch.toPid){
+        if(!playerChanges.has(ch.toPid)){
+          const info=pidInfo.get(ch.toPid)||{};
+          playerChanges.set(ch.toPid,{gained:0,lost:0,name:info.name||'',color:info.color||'#888'});
+        }
+        playerChanges.get(ch.toPid).gained++;
+      }
+      if(ch.fromPid){
+        if(!playerChanges.has(ch.fromPid)){
+          const info=pidInfo.get(ch.fromPid)||{};
+          playerChanges.set(ch.fromPid,{gained:0,lost:0,name:info.name||'',color:info.color||'#888'});
+        }
+        playerChanges.get(ch.fromPid).lost++;
+      }
+    }
+
+    // Summary stats
+    const totalGained = changedTiles.filter(c=>c.toPid).length;
+    const totalLost   = changedTiles.filter(c=>c.fromPid).length;
+    document.getElementById('an-gained-total').textContent = totalGained;
+    document.getElementById('an-lost-total').textContent   = totalLost;
+    document.getElementById('an-active').textContent       = playerChanges.size;
+    document.getElementById('an-unchanged').textContent    = changedTiles.length;
+
+    analysisData = {changedTiles, playerChanges, pidInfo};
+    renderAnalysisList();
+
+  }catch(e){
+    document.getElementById('analysis-list').innerHTML =
+      `<div style="padding:1rem;color:#E24B4A;font-size:12px">Error: ${e.message}</div>`;
+  }
+}
+
+function renderAnalysisList(){
+  if(!analysisData) return;
+  const {playerChanges} = analysisData;
+
+  let rows = [...playerChanges.entries()].map(([pid,c])=>({pid,...c,net:c.gained-c.lost}));
+
+  if(analysisFilter==='gainers') rows=rows.filter(r=>r.gained>0).sort((a,b)=>b.gained-a.gained);
+  else if(analysisFilter==='losers') rows=rows.filter(r=>r.lost>0).sort((a,b)=>b.lost-a.lost);
+  else rows=rows.filter(r=>r.gained>0||r.lost>0).sort((a,b)=>Math.abs(b.net)-Math.abs(a.net));
+
+  const maxVal = rows.length ? Math.max(...rows.map(r=>Math.max(r.gained,r.lost))) : 1;
+  const isMe = pid => MY_IDS.has(pid);
+
+  document.getElementById('analysis-list').innerHTML = rows.length
+    ? rows.map(r=>{
+        const net = r.net >= 0 ? `+${r.net}` : `${r.net}`;
+        const netCol = r.net > 0 ? '#1D9E75' : r.net < 0 ? '#E24B4A' : '#888';
+        const barG = Math.round(r.gained/maxVal*70);
+        const barL = Math.round(r.lost/maxVal*70);
+        return `<div class="an-row" onclick="jumpToPlayerFromAnalysis('${r.pid}')">
+          <div class="pdot" style="background:${r.color};width:8px;height:8px;border-radius:2px;flex-shrink:0"></div>
+          <div class="an-name${isMe(r.pid)?' me':''}">${esc(r.name)||'[unknown]'}</div>
+          <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+            ${r.gained?`<div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#1D9E75;width:16px">+${r.gained}</span><div class="an-bar-wrap"><div class="an-bar" style="width:${barG}px;background:#1D9E75"></div></div></span></div>`:''}
+            ${r.lost?`<div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#E24B4A;width:16px">-${r.lost}</span><div class="an-bar-wrap"><div class="an-bar" style="width:${barL}px;background:#E24B4A"></div></div></div>`:''}
+          </div>
+          <div class="an-delta" style="color:${netCol}">${net}</div>
+          <div class="an-tiles">${(r.gained+r.lost)} tiles</div>
+        </div>`;
+      }).join('')
+    : '<div style="padding:1rem;text-align:center;color:#555;font-size:12px">No changes found.</div>';
+}
+
+function setAnTab(f, btn){
+  analysisFilter=f;
+  document.querySelectorAll('.an-tab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderAnalysisList();
+}
+
+function jumpToPlayerFromAnalysis(pid){
+  closeAnalysis();
+  jumpToPlayer(pid);
+}
+
+function closeAnalysis(){
+  document.getElementById('analysis-modal').style.display='none';
+  if(analysisOverlay){ analysisOverlay=false; drawMap(); }
+  document.getElementById('analysis-map-btn').textContent='🗺 Show on map';
+}
+
+function toggleAnalysisOverlay(){
+  if(!analysisData) return;
+  analysisOverlay=!analysisOverlay;
+  document.getElementById('analysis-map-btn').textContent=
+    analysisOverlay?'🗺 Hide overlay':'🗺 Show on map';
+  closeAnalysis();
+  drawMap();
+}
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 resizeCanvas();
