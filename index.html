@@ -40,7 +40,8 @@ button:disabled{opacity:0.4;cursor:default}
 #map-wrap.dragging{cursor:grabbing}
 #map-wrap.route-mode{cursor:crosshair}
 #map{display:block}
-#minimap-canvas{position:absolute;bottom:14px;right:14px;border:1px solid #333;border-radius:6px;background:#0a0a14;cursor:pointer}#tip{position:absolute;display:none;background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:8px 12px;font-size:12px;z-index:50;pointer-events:none;line-height:1.7;max-width:240px}
+#minimap-canvas{position:absolute;bottom:14px;right:14px;border:1px solid #333;border-radius:6px;background:#0a0a14;cursor:pointer}
+#tip{position:absolute;display:none;background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:8px 12px;font-size:12px;z-index:50;pointer-events:none;line-height:1.7;max-width:240px}
 #tip .tname{font-weight:500;color:#fff;font-size:13px}
 #tip .tpos{color:#888}
 #tip .thq{color:#c4b5fd;font-size:11px}
@@ -135,6 +136,7 @@ button:disabled{opacity:0.4;cursor:default}
   #toolbar{padding:8px 10px;gap:5px}
   #toolbar h1{display:none}
   #ver{display:block!important;color:#555}
+  #ver{display:block!important;color:#555}
   .sep{display:none}
   #age{display:none}
   #route-indicator{display:none!important}
@@ -155,7 +157,7 @@ button:disabled{opacity:0.4;cursor:default}
 <body>
 
 <div id="toolbar">
-  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.4</span>
+  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.6</span><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.4</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -273,8 +275,8 @@ let routeMode=false,routePidA=null,routePidB=null,routePath=null;
 let routePathMap=null;
 
 // Timeline state
-let snapshots=[];   // [{file, timestamp, label}] newest first
-let currentSnapIdx=0; // 0 = latest
+let snapshots=[];
+let currentSnapIdx=0;
 let isLive=true;
 
 function status(s){document.getElementById('status').textContent=s;}
@@ -340,7 +342,6 @@ async function loadSnapshot(file){
 // ── LOAD DATA ─────────────────────────────────────────────────────────────────
 async function loadData(url){
   status('Loading...');
-  // Save current viewport if map already loaded
   const hadTiles=tiles.length>0;
   const savedZoom=zoom, savedPanX=panX, savedPanY=panY;
 
@@ -377,14 +378,12 @@ async function loadData(url){
     document.getElementById('csvBtn').style.display='';
     resizeCanvas();
     if(hadTiles){
-      // Restore previous viewport when switching snapshots
       zoom=savedZoom; panX=savedPanX; panY=savedPanY;
     } else {
       jumpToMe();
     }
     drawMap();drawMinimap();
 
-    // Historical mode indicator
     if(!isLive){
       status(`Historical: ${document.getElementById('tl-info').textContent}`);
     } else {
@@ -645,7 +644,6 @@ function drawMap(){
       ctx.strokeStyle=col;ctx.lineWidth=2;ctx.strokeRect(sx+1,sy+1,cs-2,cs-2);
     }
   }
-  // Historical mode overlay
   if(!isLive){
     ctx.fillStyle='rgba(200,150,0,0.08)';ctx.fillRect(0,0,W,H);
     ctx.fillStyle='rgba(200,150,0,0.6)';ctx.font='11px sans-serif';
@@ -678,8 +676,9 @@ function drawMinimap(){
   ctx.strokeRect(offX+(-panX/(CELL*zoom))*sc,offY+(-panY/(CELL*zoom))*sc,(cv.width/(CELL*zoom))*sc,(cv.height/(CELL*zoom))*sc);
 }
 
-// ── ZOOM & PAN ────────────────────────────────────────────────────────────────
+// ── ZOOM & PAN (mouse + wheel) ────────────────────────────────────────────────
 const mapWrap=document.getElementById('map-wrap');
+
 mapWrap.addEventListener('wheel',e=>{
   e.preventDefault();
   const f=e.deltaY<0?1.15:0.87;
@@ -737,104 +736,172 @@ mapWrap.addEventListener('contextmenu',e=>{
 });
 mapWrap.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';});
 
-// ── TOUCH EVENTS ──────────────────────────────────────────────────────────────
-let t1x=0,t1y=0,tPanX=0,tPanY=0;
-let pinchDist0=0,pinchMidX0=0,pinchMidY0=0;
-let tStartX=0,tStartY=0,tMoved=false,longTimer=null;
-const LONG_MS=600, TAP_PX=12;
+// ── TOUCH EVENTS (identifier-based, Android-safe) ─────────────────────────────
+//
+// Core fix: track each finger by touch.identifier in a Map, never by
+// array index. Android Chrome may shuffle e.touches[] order between
+// events, which breaks midpoint / distance calculations when using [0]/[1].
+//
+const activePointers = new Map(); // identifier → {x, y}
 
-function isButton(el){return el&&(el.tagName==='BUTTON'||el.closest('button'));}
+let _panStart   = null; // {panX, panY, x, y}   – saved state at 1-finger start
+let _pinchStart = null; // {midX, midY, dist, panX, panY, zoom} – saved at 2-finger start
+let _touchMoved = false;
+let _longTimer  = null;
+let _tooltipTimer = null;
 
-mapWrap.addEventListener('touchstart',e=>{
-  if(isButton(e.target)) return;
+const TOUCH_TAP_PX  = 12;   // max movement for tap/longpress
+const TOUCH_LONG_MS = 600;  // longpress threshold
+
+function _isBtn(el){ return el && (el.tagName==='BUTTON' || el.closest('button')); }
+
+function _syncPointer(touch, rect){
+  activePointers.set(touch.identifier, {
+    x: touch.clientX - rect.left,
+    y: touch.clientY - rect.top
+  });
+}
+
+function _pinchGeometry(){
+  // Returns midpoint + distance from the two active pointers.
+  // Uses Map insertion order — stable regardless of e.touches[] shuffle.
+  const [a, b] = activePointers.values();
+  return {
+    midX: (a.x + b.x) / 2,
+    midY: (a.y + b.y) / 2,
+    dist: Math.hypot(b.x - a.x, b.y - a.y) || 1
+  };
+}
+
+mapWrap.addEventListener('touchstart', e => {
+  if(_isBtn(e.target)) return;
   e.preventDefault();
-  document.getElementById('touch-tooltip').style.display='none';
-  clearTimeout(longTimer);
-  tMoved=false;
 
-  if(e.touches.length===1){
-    const t=e.touches[0];
-    t1x=t.clientX; t1y=t.clientY;
-    tStartX=t.clientX; tStartY=t.clientY;
-    tPanX=panX; tPanY=panY;
-    longTimer=setTimeout(()=>{
-      if(!tMoved){
-        const rect=mapWrap.getBoundingClientRect();
-        const {wx,wy}=screenToWorld(t1x-rect.left,t1y-rect.top);
-        const idx=tileMap.get(`${wx},${wy}`);
-        if(idx!==undefined) showNeighborPopup(tiles[idx].pid,t1x,t1y);
+  const rect = mapWrap.getBoundingClientRect();
+  for(const t of e.changedTouches) _syncPointer(t, rect);
+
+  clearTimeout(_longTimer);
+  clearTimeout(_tooltipTimer);
+  document.getElementById('touch-tooltip').style.display = 'none';
+
+  if(activePointers.size === 1){
+    // ── First finger: prepare pan / tap / longpress ──
+    _touchMoved = false;
+    _pinchStart = null;
+    const [,p] = [...activePointers.entries()][0];
+    _panStart = { panX, panY, x: p.x, y: p.y };
+
+    // Capture the position now for the long-press closure
+    const lpx = p.x, lpy = p.y;
+    _longTimer = setTimeout(() => {
+      if(!_touchMoved){
+        const {wx, wy} = screenToWorld(lpx, lpy);
+        const idx = tileMap.get(`${wx},${wy}`);
+        if(idx !== undefined) showNeighborPopup(tiles[idx].pid, lpx + rect.left, lpy + rect.top);
       }
-    },LONG_MS);
-  } else if(e.touches.length===2){
-    clearTimeout(longTimer);
-    const rect=mapWrap.getBoundingClientRect();
-    const ax=e.touches[0].clientX-rect.left, ay=e.touches[0].clientY-rect.top;
-    const bx=e.touches[1].clientX-rect.left, by=e.touches[1].clientY-rect.top;
-    pinchDist0=Math.hypot(bx-ax,by-ay)||1;
-    pinchMidX0=(ax+bx)/2;
-    pinchMidY0=(ay+by)/2;
+    }, TOUCH_LONG_MS);
+
+  } else if(activePointers.size === 2){
+    // ── Second finger: switch to pinch ──
+    clearTimeout(_longTimer);
+    _touchMoved = true;   // suppress tap after a pinch
+    _panStart   = null;
+    const { midX, midY, dist } = _pinchGeometry();
+    _pinchStart = { midX, midY, dist, panX, panY, zoom };
   }
-},{passive:false});
+}, { passive: false });
 
-mapWrap.addEventListener('touchmove',e=>{
-  if(isButton(e.target)) return;
+mapWrap.addEventListener('touchmove', e => {
+  if(_isBtn(e.target)) return;
   e.preventDefault();
-  document.getElementById('touch-tooltip').style.display='none';
 
-  if(e.touches.length===1){
-    const t=e.touches[0];
-    const dx=t.clientX-tStartX, dy=t.clientY-tStartY;
-    if(!tMoved&&Math.hypot(dx,dy)>TAP_PX){tMoved=true;clearTimeout(longTimer);}
-    if(tMoved){panX=tPanX+dx;panY=tPanY+dy;drawMap();drawMinimap();}
-  } else if(e.touches.length===2){
-    tMoved=true;clearTimeout(longTimer);
-    const rect=mapWrap.getBoundingClientRect();
-    const ax=e.touches[0].clientX-rect.left, ay=e.touches[0].clientY-rect.top;
-    const bx=e.touches[1].clientX-rect.left, by=e.touches[1].clientY-rect.top;
-    const curDist=Math.hypot(bx-ax,by-ay)||1;
-    const curMidX=(ax+bx)/2, curMidY=(ay+by)/2;
-    const zf=curDist/pinchDist0;
-    const newZoom=Math.max(0.05,Math.min(80,zoom*zf));
-    // Zoom centered on PREVIOUS midpoint
-    panX=pinchMidX0-(pinchMidX0-panX)*(newZoom/zoom);
-    panY=pinchMidY0-(pinchMidY0-panY)*(newZoom/zoom);
-    zoom=newZoom;
-    // Pan by midpoint delta
-    panX+=curMidX-pinchMidX0;
-    panY+=curMidY-pinchMidY0;
-    // Update for next frame
-    pinchDist0=curDist;
-    pinchMidX0=curMidX;
-    pinchMidY0=curMidY;
-    drawMap();drawMinimap();
+  const rect = mapWrap.getBoundingClientRect();
+  for(const t of e.changedTouches) _syncPointer(t, rect);
+
+  if(activePointers.size === 1 && _panStart){
+    // ── 1-finger pan ──
+    const [,p] = [...activePointers.entries()][0];
+    const dx = p.x - _panStart.x;
+    const dy = p.y - _panStart.y;
+    if(!_touchMoved && Math.hypot(dx, dy) > TOUCH_TAP_PX){
+      _touchMoved = true;
+      clearTimeout(_longTimer);
+    }
+    if(_touchMoved){
+      panX = _panStart.panX + dx;
+      panY = _panStart.panY + dy;
+      drawMap(); drawMinimap();
+    }
+
+  } else if(activePointers.size === 2 && _pinchStart){
+    // ── 2-finger pinch-zoom ──
+    // Always compute geometry from the SAME two identifiers (Map order),
+    // compare to the FROZEN start state → no drift, no jumping.
+    const { midX, midY, dist } = _pinchGeometry();
+
+    const scale   = dist / _pinchStart.dist;
+    const newZoom = Math.max(0.05, Math.min(80, _pinchStart.zoom * scale));
+
+    // Zoom formula identical to the working wheel handler,
+    // anchored on the pinch-start midpoint.
+    panX = _pinchStart.midX - (_pinchStart.midX - _pinchStart.panX) * (newZoom / _pinchStart.zoom);
+    panY = _pinchStart.midY - (_pinchStart.midY - _pinchStart.panY) * (newZoom / _pinchStart.zoom);
+
+    // Also translate by how much the midpoint itself moved.
+    panX += midX - _pinchStart.midX;
+    panY += midY - _pinchStart.midY;
+
+    zoom = newZoom;
+    drawMap(); drawMinimap();
   }
-},{passive:false});
+}, { passive: false });
 
-mapWrap.addEventListener('touchend',e=>{
-  if(isButton(e.target)) return;
+function _handleTouchEnd(e){
+  if(_isBtn(e.target)) return;
   e.preventDefault();
-  clearTimeout(longTimer);
-  if(!tMoved&&e.changedTouches.length===1){
-    const t=e.changedTouches[0];
-    const rect=mapWrap.getBoundingClientRect();
-    const {wx,wy}=screenToWorld(t.clientX-rect.left,t.clientY-rect.top);
-    const idx=tileMap.get(`${wx},${wy}`);
-    if(idx!==undefined){
-      const tile=tiles[idx];
-      if(routeMode){
-        selectRoutePlayer(tile.pid);
-      } else {
-        const p=players[tile.pidIdx]||{};
-        const tt=document.getElementById('touch-tooltip');
-        tt.querySelector('.tname').textContent=p.name||'[unknown]';
-        tt.querySelector('.tpos').textContent=`Position: (${wx}, ${wy})`;
-        tt.querySelector('.thq').textContent=tile.isHQ?'⌂ Headquarters':'';
-        tt.style.display='block';
-        setTimeout(()=>tt.style.display='none',3000);
+  clearTimeout(_longTimer);
+
+  const rect = mapWrap.getBoundingClientRect();
+  for(const t of e.changedTouches) activePointers.delete(t.identifier);
+
+  if(activePointers.size === 0){
+    // ── All fingers lifted ──
+    if(!_touchMoved && _panStart){
+      // It was a tap — show tooltip or select route
+      const {wx, wy} = screenToWorld(_panStart.x, _panStart.y);
+      const idx = tileMap.get(`${wx},${wy}`);
+      if(idx !== undefined){
+        const tile = tiles[idx];
+        if(routeMode){
+          selectRoutePlayer(tile.pid);
+        } else {
+          const p = players[tile.pidIdx] || {};
+          const tt = document.getElementById('touch-tooltip');
+          tt.querySelector('.tname').textContent = p.name || '[unknown]';
+          tt.querySelector('.tpos').textContent  = `Position: (${wx}, ${wy})`;
+          tt.querySelector('.thq').textContent   = tile.isHQ ? '⌂ Headquarters' : '';
+          tt.style.display = 'block';
+          clearTimeout(_tooltipTimer);
+          _tooltipTimer = setTimeout(() => { tt.style.display = 'none'; }, 3000);
+        }
       }
     }
+    _panStart   = null;
+    _pinchStart = null;
+    _touchMoved = false;
+
+  } else if(activePointers.size === 1){
+    // ── One finger remains after pinch ──
+    // Resume pan from wherever that finger currently is.
+    _pinchStart = null;
+    _touchMoved = true;  // no tap after a pinch
+    const [,p] = [...activePointers.entries()][0];
+    _panStart = { panX, panY, x: p.x, y: p.y };
   }
-},{passive:false});
+}
+
+mapWrap.addEventListener('touchend',    _handleTouchEnd, { passive: false });
+mapWrap.addEventListener('touchcancel', _handleTouchEnd, { passive: false });
 
 // ── SIDEBAR TOGGLE (mobile) ───────────────────────────────────────────────────
 function toggleSidebar(){
