@@ -94,6 +94,14 @@ button:disabled{opacity:0.4;cursor:default}
 .pbar-fill{height:3px;border-radius:2px}
 .p-route-btn{width:18px;height:18px;padding:0;font-size:10px;border-radius:4px;flex-shrink:0;line-height:18px;text-align:center;display:none;background:#1a1a2a;border-color:#333}
 .route-mode-active .p-route-btn{display:block}
+.p-mark-btn{width:18px;height:18px;padding:0;font-size:11px;border-radius:4px;flex-shrink:0;line-height:18px;text-align:center;background:transparent;border:1px solid #2a2a3e;color:#555;margin-left:2px}
+.p-mark-btn:hover{border-color:#888;color:#ccc}
+.mark-friend{color:#1D9E75!important;border-color:#1D9E75!important}
+.mark-enemy{color:#E24B4A!important;border-color:#E24B4A!important}
+.prow.friend{border-left:2px solid #1D9E75}
+.prow.enemy{border-left:2px solid #E24B4A}
+.nmark{font-size:11px;padding:2px 6px;border-radius:4px;flex-shrink:0;background:transparent;border:1px solid #2a2a3e;color:#555}
+.nmark:hover{border-color:#888;color:#ccc}
 
 /* ── NEIGHBOR POPUP ── */
 #neighbor-popup{position:fixed;background:#0f0f1e;border:1px solid #2a2a4e;border-radius:10px;padding:0;min-width:220px;max-width:280px;max-height:400px;display:none;z-index:200;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.5)}
@@ -168,7 +176,7 @@ button:disabled{opacity:0.4;cursor:default}
 <body>
 
 <div id="toolbar">
-  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.7b</span>
+  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v2.0</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -238,6 +246,8 @@ button:disabled{opacity:0.4;cursor:default}
         <button class="fb on" onclick="setFilter('all',this)">All</button>
         <button class="fb" onclick="setFilter('named',this)">Named</button>
         <button class="fb" onclick="setFilter('inactive',this)">Inactive</button>
+        <button class="fb" onclick="setFilter('friends',this)" style="color:#1D9E75">♥ Friends</button>
+        <button class="fb" onclick="setFilter('enemies',this)" style="color:#E24B4A">✕ Enemies</button>
       </div>
     </div>
     <div id="player-list"></div>
@@ -612,6 +622,7 @@ function showNeighborPopup(pid,sx,sy){
   const p=players.find(pl=>pl.pid===pid)||{};
   document.getElementById('neighbor-title').textContent=`Neighbors of ${p.name||'[unknown]'} (${nbrs?nbrs.size:0})`;
   const list=document.getElementById('neighbor-list');
+  const marks=loadMarks();
   if(!nbrs||nbrs.size===0){
     list.innerHTML='<div style="padding:1rem;color:#555;font-size:12px">No neighboring players found.</div>';
   } else {
@@ -619,10 +630,16 @@ function showNeighborPopup(pid,sx,sy){
     list.innerHTML=sorted.map(([npid,cnt])=>{
       const np=players.find(pl=>pl.pid===npid)||{};
       const isMe=MY_IDS.has(npid);
+      const mark=marks[npid]||null;
+      const dotCol=markColor(npid,np.color||'#666');
+      const fCls=mark==='friend'?'mark-friend':'';
+      const eCls=mark==='enemy'?'mark-enemy':'';
       return `<div class="nrow" onclick="onNeighborClick('${npid}')">
-        <div class="ndot" style="background:${np.color||'#666'}"></div>
+        <div class="ndot" style="background:${dotCol}"></div>
         <div class="nname${np.name?'':' unnamed'}${isMe?' me':''}">${esc(np.name||'[unknown]')}</div>
         <div class="ncontact">${cnt} border${cnt>1?'s':''}</div>
+        <button class="nmark ${fCls}" data-pid="${npid}" data-mtype="friend" onclick="toggleMark('${npid}','friend',event)" title="Friend">♥</button>
+        <button class="nmark ${eCls}" data-pid="${npid}" data-mtype="enemy" onclick="toggleMark('${npid}','enemy',event)" title="Enemy">✕</button>
         <button class="nroute" onclick="onNeighborRoute('${pid}','${npid}',event)">→</button>
       </div>`;
     }).join('');
@@ -679,8 +696,8 @@ function drawMap(){
       const type=routePathMap.get(key);
       col=type==='own'?'#7F77DD':type==='conquer'?'#E24B4A':type==='target'?'#1D9E75':t.color;
     } else if(highlightPid&&t.pid===highlightPid){col='#ffe066';}
-    else if(t.isHQ){col=t.isMe?'#533AB7':'#6B1A1A';}
-    else{col=t.color;}
+    else if(t.isHQ){col=t.isMe?'#533AB7':(getMark(t.pid)==='friend'?'#0a5f40':getMark(t.pid)==='enemy'?'#5f0a0a':'#6B1A1A');}
+    else{col=markColor(t.pid,t.color);}
     if(routePath&&routePathMap&&!routePathMap.has(key)) ctx.globalAlpha=0.35;
     ctx.fillStyle=col;ctx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
     ctx.globalAlpha=1;
@@ -1045,28 +1062,79 @@ function filterPlayers(){clearTimeout(filterTimer);filterTimer=setTimeout(_fp,10
 function setFilter(f,btn){activeFilter=f;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');filterPlayers();}
 function _fp(){
   const q=document.getElementById('search').value.toLowerCase();
+  const marks=loadMarks();
   filteredPlayers=players.filter(p=>{
     if(activeFilter==='named'&&!p.name) return false;
     if(activeFilter==='inactive'&&!p.inactive) return false;
+    if(activeFilter==='friends'&&marks[p.pid]!=='friend') return false;
+    if(activeFilter==='enemies'&&marks[p.pid]!=='enemy') return false;
     if(q&&!p.name.toLowerCase().includes(q)&&!p.pid.includes(q)&&!(p.wallet||'').includes(q)) return false;
     return true;
   });
   renderPlayerList();
 }
+// ── MARKS (friend / enemy) ────────────────────────────────────────────────────
+const MARKS_KEY = 'sui_turf_marks';
+
+function loadMarks(){
+  try{ return JSON.parse(localStorage.getItem(MARKS_KEY)||'{}'); }
+  catch(e){ return {}; }
+}
+function saveMarks(m){ localStorage.setItem(MARKS_KEY, JSON.stringify(m)); }
+
+function getMark(pid){ return loadMarks()[pid]||null; } // 'friend'|'enemy'|null
+
+function toggleMark(pid, type, e){
+  if(e){ e.stopPropagation(); }
+  const marks = loadMarks();
+  if(marks[pid]===type) delete marks[pid];
+  else marks[pid] = type;
+  saveMarks(marks);
+  renderPlayerList();
+  drawMap();
+  // Refresh neighbor popup if open
+  const popup = document.getElementById('neighbor-popup');
+  if(popup.style.display!=='none'){
+    const title = document.getElementById('neighbor-title').textContent;
+    // re-render neighbor list marks
+    popup.querySelectorAll('.nmark').forEach(btn=>{
+      const npid = btn.dataset.pid;
+      const mtype = btn.dataset.mtype;
+      const cur = marks[npid];
+      btn.textContent = mtype==='friend' ? '♥' : '✕';
+      btn.className = 'nmark' + (cur===mtype ? (mtype==='friend'?' mark-friend':' mark-enemy') : '');
+    });
+  }
+}
+
+function markColor(pid, defaultColor){
+  const m = getMark(pid);
+  if(m==='friend') return '#1D9E75';
+  if(m==='enemy')  return '#E24B4A';
+  return defaultColor;
+}
+
 function renderPlayerList(){
   const maxT=filteredPlayers.length?filteredPlayers[0].tiles:1;
+  const marks=loadMarks();
   document.getElementById('player-list').innerHTML=filteredPlayers.map((p,i)=>{
     const me=MY_IDS.has(p.pid);
     const isA=p.pid===routePidA,isB=p.pid===routePidB;
-    const rowCls=`prow${me?' me':''}${isA?' route-a':''}${isB?' route-b':''}`;
+    const mark=marks[p.pid]||null;
+    const rowCls=`prow${me?' me':''}${isA?' route-a':''}${isB?' route-b':''}${mark==='friend'?' friend':''}${mark==='enemy'?' enemy':''}`;
     const nm=p.name?`<span class="pname${me?' me':''}">${esc(p.name)}</span>`:`<span class="pname unnamed">[unknown]</span>`;
     const rl=isA?'A':isB?'B':'→';
+    const friendCls=mark==='friend'?'mark-friend':'';
+    const enemyCls=mark==='enemy'?'mark-enemy':'';
+    const dotCol=markColor(p.pid,p.color);
     return `<div class="${rowCls}" onclick="onPClick('${p.pid}',event)">
       <span class="prank">${i+1}</span>
-      <span class="pdot" style="background:${p.color}"></span>
+      <span class="pdot" style="background:${dotCol}"></span>
       ${nm}
       <span class="ptiles">${p.tiles.toLocaleString('en')}</span>
-      <div class="pbar"><div class="pbar-fill" style="width:${Math.round(p.tiles/maxT*100)}%;background:${p.color}"></div></div>
+      <div class="pbar"><div class="pbar-fill" style="width:${Math.round(p.tiles/maxT*100)}%;background:${dotCol}"></div></div>
+      <button class="p-mark-btn ${friendCls}" onclick="toggleMark('${p.pid}','friend',event)" title="Mark as friend">♥</button>
+      <button class="p-mark-btn ${enemyCls}" onclick="toggleMark('${p.pid}','enemy',event)" title="Mark as enemy">✕</button>
       <button class="p-route-btn" onclick="onRouteBtn('${p.pid}',event)">${rl}</button>
     </div>`;
   }).join('')||'<div style="color:#444;padding:1rem;font-size:12px">No results</div>';
@@ -1236,17 +1304,20 @@ function renderAnalysisList(){
   const maxVal = rows.length ? Math.max(...rows.map(r=>Math.max(r.gained,r.lost))) : 1;
   const isMe = pid => MY_IDS.has(pid);
 
+  const marks=loadMarks();
   document.getElementById('analysis-list').innerHTML = rows.length
     ? rows.map(r=>{
         const net = r.net >= 0 ? `+${r.net}` : `${r.net}`;
         const netCol = r.net > 0 ? '#1D9E75' : r.net < 0 ? '#E24B4A' : '#888';
         const barG = Math.round(r.gained/maxVal*70);
         const barL = Math.round(r.lost/maxVal*70);
+        const mark=marks[r.pid];
+        const markBadge=mark==='friend'?'<span style="color:#1D9E75;font-size:10px">♥</span>':mark==='enemy'?'<span style="color:#E24B4A;font-size:10px">✕</span>':'';
         return `<div class="an-row" onclick="jumpToPlayerFromAnalysis('${r.pid}')">
-          <div class="pdot" style="background:${r.color};width:8px;height:8px;border-radius:2px;flex-shrink:0"></div>
-          <div class="an-name${isMe(r.pid)?' me':''}">${esc(r.name)||'[unknown]'}</div>
+          <div class="pdot" style="background:${markColor(r.pid,r.color)};width:8px;height:8px;border-radius:2px;flex-shrink:0"></div>
+          <div class="an-name${isMe(r.pid)?' me':''}">${markBadge} ${esc(r.name)||'[unknown]'}</div>
           <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
-            ${r.gained?`<div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#1D9E75;width:16px">+${r.gained}</span><div class="an-bar-wrap"><div class="an-bar" style="width:${barG}px;background:#1D9E75"></div></div></span></div>`:''}
+            ${r.gained?`<div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#1D9E75;width:16px">+${r.gained}</span><div class="an-bar-wrap"><div class="an-bar" style="width:${barG}px;background:#1D9E75"></div></div></div>`:''}
             ${r.lost?`<div style="display:flex;align-items:center;gap:4px"><span style="font-size:10px;color:#E24B4A;width:16px">-${r.lost}</span><div class="an-bar-wrap"><div class="an-bar" style="width:${barL}px;background:#E24B4A"></div></div></div>`:''}
           </div>
           <div class="an-delta" style="color:${netCol}">${net}</div>
