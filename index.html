@@ -149,7 +149,7 @@ button:disabled{opacity:0.4;cursor:default}
   #minimap-canvas{width:110px;height:110px;bottom:20px;right:20px}
   #zoom-btns{top:auto;bottom:20px;right:140px;flex-direction:row;gap:6px}
   #zoom-btns button{width:46px;height:46px;font-size:22px;padding:0}
-  #me-btn{top:auto!important;bottom:80px;left:20px;padding:10px 16px;font-size:14px}
+  #me-btn{position:fixed!important;top:auto!important;bottom:80px;left:20px;padding:10px 16px;font-size:14px;z-index:100}
   button{padding:7px 11px;font-size:13px}
 }
 </style>
@@ -769,8 +769,8 @@ mapWrap.addEventListener('touchstart',e=>{
     pinchDist0=Math.hypot(bx-ax,by-ay);
     pinchZoom0=zoom;
     // Store the world coordinate under the midpoint
-    pinchWX=(mx-panX)/(CELL*zoom);
-    pinchWY=(panY-my)/(CELL*zoom);
+    pinchWX=(mx-panX)/(CELL*zoom)+minX;
+    pinchWY=maxY-(my-panY)/(CELL*zoom);
   }
 },{passive:false});
 
@@ -796,8 +796,8 @@ mapWrap.addEventListener('touchmove',e=>{
     const dist=Math.hypot(bx-ax,by-ay);
     const newZoom=Math.max(0.05,Math.min(80,pinchZoom0*(dist/pinchDist0)));
     // Keep pinchWX/pinchWY under the current midpoint
-    panX=mx-pinchWX*CELL*newZoom;
-    panY=my+pinchWY*CELL*newZoom;
+    panX=mx-(pinchWX-minX)*CELL*newZoom;
+    panY=my-(maxY-pinchWY)*CELL*newZoom;
     zoom=newZoom;
     drawMap();drawMinimap();
   }
