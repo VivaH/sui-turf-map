@@ -126,15 +126,15 @@ button:disabled{opacity:0.4;cursor:default}
 #refresh-result{font-size:12px;margin-top:8px;min-height:18px}
 
 /* ── MOBILE ── */
-#sidebar-toggle{display:none;position:absolute;bottom:14px;left:14px;z-index:30;width:44px;height:44px;padding:0;font-size:18px;border-radius:50%;background:#1a1a2e;border:1px solid #444}
+#sidebar-toggle{display:none;position:fixed;bottom:20px;left:20px;z-index:100;width:48px;height:48px;padding:0;font-size:20px;border-radius:50%;background:#1e1e2e;border:1px solid #555}
 #sidebar-toggle.open{background:#185FA5;border-color:#378ADD}
-#touch-tooltip{position:absolute;display:none;background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:10px 14px;font-size:13px;z-index:50;pointer-events:none;line-height:1.8;max-width:220px;left:50%;transform:translateX(-50%);bottom:80px}
-#touch-tooltip .tname{font-weight:500;color:#fff;font-size:14px}
+#touch-tooltip{position:fixed;display:none;background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:10px 14px;font-size:14px;z-index:60;pointer-events:none;line-height:1.8;max-width:260px;left:50%;top:50%;transform:translate(-50%,-50%)}
+#touch-tooltip .tname{font-weight:500;color:#fff;font-size:15px}
 #touch-tooltip .tpos{color:#888}
-#touch-tooltip .thq{color:#c4b5fd;font-size:12px}
+#touch-tooltip .thq{color:#c4b5fd;font-size:13px}
 
-@media (max-width: 700px){
-  #toolbar{padding:8px 10px;gap:6px}
+@media (max-width: 768px){
+  #toolbar{padding:8px 10px;gap:5px}
   #toolbar h1{display:none}
   .sep{display:none}
   #age{display:none}
@@ -142,16 +142,15 @@ button:disabled{opacity:0.4;cursor:default}
   #tl-label{display:none}
   #tl-count{display:none}
   #timeline-bar{padding:6px 10px;gap:6px}
-  #sidebar{position:absolute;right:0;top:0;bottom:0;z-index:20;transform:translateX(100%);transition:transform 0.25s ease;box-shadow:-4px 0 20px rgba(0,0,0,0.5)}
+  #sidebar{position:fixed;right:0;top:0;bottom:0;z-index:50;transform:translateX(100%);transition:transform 0.25s ease;box-shadow:-4px 0 20px rgba(0,0,0,0.6);width:280px}
   #sidebar.open{transform:translateX(0)}
-  #sidebar-toggle{display:flex;align-items:center;justify-content:center;bottom:16px;left:16px}
-  #route-panel{left:8px;right:8px;max-width:none;bottom:72px}
-  #minimap-canvas{width:110px;height:110px;bottom:16px;right:16px}
-  #zoom-btns{top:auto;bottom:16px;right:136px;flex-direction:row}
-  #zoom-btns button{width:44px;height:44px;font-size:22px}
-  #me-btn{top:auto;bottom:72px;left:16px;padding:8px 14px;font-size:13px}
-  button{padding:6px 10px;font-size:13px}
-  #touch-tooltip{bottom:auto;top:50%;transform:translate(-50%,-50%)}
+  #sidebar-toggle{display:flex;align-items:center;justify-content:center}
+  #route-panel{left:8px;right:8px;max-width:none;bottom:80px}
+  #minimap-canvas{width:110px;height:110px;bottom:20px;right:20px}
+  #zoom-btns{top:auto;bottom:20px;right:140px;flex-direction:row;gap:6px}
+  #zoom-btns button{width:46px;height:46px;font-size:22px;padding:0}
+  #me-btn{top:auto!important;bottom:80px;left:20px;padding:10px 16px;font-size:14px}
+  button{padding:7px 11px;font-size:13px}
 }
 </style>
 </head>
@@ -191,7 +190,7 @@ button:disabled{opacity:0.4;cursor:default}
       <button onclick="zoomBy(0.77)">−</button>
       <button onclick="resetView()" style="font-size:11px">⊡</button>
     </div>
-    <button id="me-btn" onclick="jumpToMe()" ontouchend="jumpToMe();event.preventDefault()" style="font-size:11px">★ Me</button>
+    <button id="me-btn" onclick="jumpToMe()" style="font-size:11px">★ Me</button>
     <button id="sidebar-toggle" onclick="toggleSidebar()" title="Player list">☰</button>
     <div id="touch-tooltip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div></div>
     <div id="route-panel">
@@ -733,80 +732,82 @@ mapWrap.addEventListener('contextmenu',e=>{
 mapWrap.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';});
 
 // ── TOUCH EVENTS ──────────────────────────────────────────────────────────────
-let touch1={x:0,y:0};
-let touchPanX=0,touchPanY=0;
-let pinchStartDist=0,pinchStartZoom=0,pinchMidX=0,pinchMidY=0,pinchStartPanX=0,pinchStartPanY=0;
-let touchStartX=0,touchStartY=0,touchMoved=false,longPressTimer=null;
-const LONG_PRESS_MS=500, TAP_THRESHOLD=10;
+let t1x=0,t1y=0,tPanX=0,tPanY=0;
+let pinchDist0=0,pinchZoom0=0,pinchWX=0,pinchWY=0;
+let tStartX=0,tStartY=0,tMoved=false,longTimer=null;
+const LONG_MS=600, TAP_PX=12;
 
-function touchDist(t1,t2){return Math.hypot(t1.clientX-t2.clientX,t1.clientY-t2.clientY);}
+function isButton(el){return el&&(el.tagName==='BUTTON'||el.closest('button'));}
 
 mapWrap.addEventListener('touchstart',e=>{
+  // Don't intercept button touches
+  if(isButton(e.target)) return;
   e.preventDefault();
   document.getElementById('touch-tooltip').style.display='none';
-  touchMoved=false;
-  clearTimeout(longPressTimer);
+  clearTimeout(longTimer);
+  tMoved=false;
 
   if(e.touches.length===1){
     const t=e.touches[0];
-    touch1={x:t.clientX,y:t.clientY};
-    touchStartX=t.clientX;touchStartY=t.clientY;
-    touchPanX=panX;touchPanY=panY;
-
-    longPressTimer=setTimeout(()=>{
-      if(!touchMoved){
+    t1x=t.clientX; t1y=t.clientY;
+    tStartX=t.clientX; tStartY=t.clientY;
+    tPanX=panX; tPanY=panY;
+    longTimer=setTimeout(()=>{
+      if(!tMoved){
         const rect=mapWrap.getBoundingClientRect();
-        const {wx,wy}=screenToWorld(touch1.x-rect.left,touch1.y-rect.top);
+        const {wx,wy}=screenToWorld(t1x-rect.left,t1y-rect.top);
         const idx=tileMap.get(`${wx},${wy}`);
-        if(idx!==undefined) showNeighborPopup(tiles[idx].pid,touch1.x,touch1.y);
+        if(idx!==undefined) showNeighborPopup(tiles[idx].pid,t1x,t1y);
       }
-    },LONG_PRESS_MS);
+    },LONG_MS);
   } else if(e.touches.length===2){
-    clearTimeout(longPressTimer);
+    clearTimeout(longTimer);
     const rect=mapWrap.getBoundingClientRect();
-    pinchStartDist=touchDist(e.touches[0],e.touches[1]);
-    pinchStartZoom=zoom;
-    pinchMidX=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left;
-    pinchMidY=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top;
-    pinchStartPanX=panX;pinchStartPanY=panY;
+    const ax=e.touches[0].clientX-rect.left, ay=e.touches[0].clientY-rect.top;
+    const bx=e.touches[1].clientX-rect.left, by=e.touches[1].clientY-rect.top;
+    const mx=(ax+bx)/2, my=(ay+by)/2;
+    pinchDist0=Math.hypot(bx-ax,by-ay);
+    pinchZoom0=zoom;
+    // Store the world coordinate under the midpoint
+    pinchWX=(mx-panX)/(CELL*zoom);
+    pinchWY=(panY-my)/(CELL*zoom);
   }
 },{passive:false});
 
 mapWrap.addEventListener('touchmove',e=>{
+  if(isButton(e.target)) return;
   e.preventDefault();
   document.getElementById('touch-tooltip').style.display='none';
 
   if(e.touches.length===1){
     const t=e.touches[0];
-    const dx=t.clientX-touchStartX,dy=t.clientY-touchStartY;
-    if(!touchMoved&&Math.hypot(dx,dy)>TAP_THRESHOLD) touchMoved=true;
-    if(touchMoved){
-      clearTimeout(longPressTimer);
-      panX=touchPanX+dx;panY=touchPanY+dy;
+    const dx=t.clientX-tStartX, dy=t.clientY-tStartY;
+    if(!tMoved&&Math.hypot(dx,dy)>TAP_PX){tMoved=true;clearTimeout(longTimer);}
+    if(tMoved){
+      panX=tPanX+dx; panY=tPanY+dy;
       drawMap();drawMinimap();
     }
   } else if(e.touches.length===2){
-    touchMoved=true;
-    clearTimeout(longPressTimer);
+    tMoved=true; clearTimeout(longTimer);
     const rect=mapWrap.getBoundingClientRect();
-    const dist=touchDist(e.touches[0],e.touches[1]);
-    const scale=dist/pinchStartDist;
-    const newZoom=Math.max(0.05,Math.min(80,pinchStartZoom*scale));
-    // current midpoint in screen coords
-    const curMidX=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left;
-    const curMidY=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top;
-    // zoom around start midpoint, then pan to follow current midpoint
-    panX=curMidX-(pinchMidX-pinchStartPanX)*scale;
-    panY=curMidY-(pinchMidY-pinchStartPanY)*scale;
+    const ax=e.touches[0].clientX-rect.left, ay=e.touches[0].clientY-rect.top;
+    const bx=e.touches[1].clientX-rect.left, by=e.touches[1].clientY-rect.top;
+    const mx=(ax+bx)/2, my=(ay+by)/2;
+    const dist=Math.hypot(bx-ax,by-ay);
+    const newZoom=Math.max(0.05,Math.min(80,pinchZoom0*(dist/pinchDist0)));
+    // Keep pinchWX/pinchWY under the current midpoint
+    panX=mx-pinchWX*CELL*newZoom;
+    panY=my+pinchWY*CELL*newZoom;
     zoom=newZoom;
     drawMap();drawMinimap();
   }
 },{passive:false});
 
 mapWrap.addEventListener('touchend',e=>{
+  if(isButton(e.target)) return;
   e.preventDefault();
-  clearTimeout(longPressTimer);
-  if(!touchMoved&&e.changedTouches.length===1){
+  clearTimeout(longTimer);
+  if(!tMoved&&e.changedTouches.length===1){
     const t=e.changedTouches[0];
     const rect=mapWrap.getBoundingClientRect();
     const {wx,wy}=screenToWorld(t.clientX-rect.left,t.clientY-rect.top);
@@ -822,7 +823,7 @@ mapWrap.addEventListener('touchend',e=>{
         tt.querySelector('.tpos').textContent=`Position: (${wx}, ${wy})`;
         tt.querySelector('.thq').textContent=tile.isHQ?'⌂ Headquarters':'';
         tt.style.display='block';
-        setTimeout(()=>tt.style.display='none',2500);
+        setTimeout(()=>tt.style.display='none',3000);
       }
     }
   }
