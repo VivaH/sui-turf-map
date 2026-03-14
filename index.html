@@ -144,13 +144,14 @@ button:disabled{opacity:0.4;cursor:default}
   #timeline-bar{padding:6px 10px;gap:6px}
   #sidebar{position:absolute;right:0;top:0;bottom:0;z-index:20;transform:translateX(100%);transition:transform 0.25s ease;box-shadow:-4px 0 20px rgba(0,0,0,0.5)}
   #sidebar.open{transform:translateX(0)}
-  #sidebar-toggle{display:flex;align-items:center;justify-content:center}
-  #route-panel{left:8px;right:8px;max-width:none;bottom:70px}
-  #minimap-canvas{width:120px;height:120px;bottom:70px;right:8px}
-  #zoom-btns{top:auto;bottom:70px;right:136px}
-  #me-btn{bottom:70px;left:8px;top:auto}
+  #sidebar-toggle{display:flex;align-items:center;justify-content:center;bottom:16px;left:16px}
+  #route-panel{left:8px;right:8px;max-width:none;bottom:72px}
+  #minimap-canvas{width:110px;height:110px;bottom:16px;right:16px}
+  #zoom-btns{top:auto;bottom:16px;right:136px;flex-direction:row}
+  #zoom-btns button{width:44px;height:44px;font-size:22px}
+  #me-btn{top:auto;bottom:72px;left:16px;padding:8px 14px;font-size:13px}
   button{padding:6px 10px;font-size:13px}
-  #zoom-btns button{width:40px;height:40px;font-size:20px}
+  #touch-tooltip{bottom:auto;top:50%;transform:translate(-50%,-50%)}
 }
 </style>
 </head>
@@ -190,7 +191,7 @@ button:disabled{opacity:0.4;cursor:default}
       <button onclick="zoomBy(0.77)">−</button>
       <button onclick="resetView()" style="font-size:11px">⊡</button>
     </div>
-    <button id="me-btn" onclick="jumpToMe()" style="font-size:11px">★ Me</button>
+    <button id="me-btn" onclick="jumpToMe()" ontouchend="jumpToMe();event.preventDefault()" style="font-size:11px">★ Me</button>
     <button id="sidebar-toggle" onclick="toggleSidebar()" title="Player list">☰</button>
     <div id="touch-tooltip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div></div>
     <div id="route-panel">
@@ -732,18 +733,13 @@ mapWrap.addEventListener('contextmenu',e=>{
 mapWrap.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';});
 
 // ── TOUCH EVENTS ──────────────────────────────────────────────────────────────
-let touch1={x:0,y:0}, touch2={x:0,y:0};
-let touchPanX=0, touchPanY=0;
-let pinchStartDist=0, pinchStartZoom=0;
-let touchMoved=false, longPressTimer=null;
-const LONG_PRESS_MS=500;
+let touch1={x:0,y:0};
+let touchPanX=0,touchPanY=0;
+let pinchStartDist=0,pinchStartZoom=0,pinchMidX=0,pinchMidY=0,pinchStartPanX=0,pinchStartPanY=0;
+let touchStartX=0,touchStartY=0,touchMoved=false,longPressTimer=null;
+const LONG_PRESS_MS=500, TAP_THRESHOLD=10;
 
-function touchDist(t1,t2){
-  return Math.hypot(t1.clientX-t2.clientX,t1.clientY-t2.clientY);
-}
-function touchMid(t1,t2,rect){
-  return {mx:(t1.clientX+t2.clientX)/2-rect.left, my:(t1.clientY+t2.clientY)/2-rect.top};
-}
+function touchDist(t1,t2){return Math.hypot(t1.clientX-t2.clientX,t1.clientY-t2.clientY);}
 
 mapWrap.addEventListener('touchstart',e=>{
   e.preventDefault();
@@ -754,9 +750,9 @@ mapWrap.addEventListener('touchstart',e=>{
   if(e.touches.length===1){
     const t=e.touches[0];
     touch1={x:t.clientX,y:t.clientY};
-    touchPanX=panX; touchPanY=panY;
+    touchStartX=t.clientX;touchStartY=t.clientY;
+    touchPanX=panX;touchPanY=panY;
 
-    // Long press → neighbor popup
     longPressTimer=setTimeout(()=>{
       if(!touchMoved){
         const rect=mapWrap.getBoundingClientRect();
@@ -767,35 +763,41 @@ mapWrap.addEventListener('touchstart',e=>{
     },LONG_PRESS_MS);
   } else if(e.touches.length===2){
     clearTimeout(longPressTimer);
+    const rect=mapWrap.getBoundingClientRect();
     pinchStartDist=touchDist(e.touches[0],e.touches[1]);
     pinchStartZoom=zoom;
-    const rect=mapWrap.getBoundingClientRect();
-    const mid=touchMid(e.touches[0],e.touches[1],rect);
-    touch1={x:e.touches[0].clientX,y:e.touches[1].clientY};
-    touch2={x:mid.mx,y:mid.my};
-    touchPanX=panX; touchPanY=panY;
+    pinchMidX=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left;
+    pinchMidY=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top;
+    pinchStartPanX=panX;pinchStartPanY=panY;
   }
 },{passive:false});
 
 mapWrap.addEventListener('touchmove',e=>{
   e.preventDefault();
-  clearTimeout(longPressTimer);
-  touchMoved=true;
   document.getElementById('touch-tooltip').style.display='none';
 
   if(e.touches.length===1){
     const t=e.touches[0];
-    panX=touchPanX+(t.clientX-touch1.x);
-    panY=touchPanY+(t.clientY-touch1.y);
-    drawMap();drawMinimap();
+    const dx=t.clientX-touchStartX,dy=t.clientY-touchStartY;
+    if(!touchMoved&&Math.hypot(dx,dy)>TAP_THRESHOLD) touchMoved=true;
+    if(touchMoved){
+      clearTimeout(longPressTimer);
+      panX=touchPanX+dx;panY=touchPanY+dy;
+      drawMap();drawMinimap();
+    }
   } else if(e.touches.length===2){
+    touchMoved=true;
+    clearTimeout(longPressTimer);
     const rect=mapWrap.getBoundingClientRect();
     const dist=touchDist(e.touches[0],e.touches[1]);
-    const mid=touchMid(e.touches[0],e.touches[1],rect);
-    const f=dist/pinchStartDist;
-    const newZoom=Math.max(0.05,Math.min(80,pinchStartZoom*f));
-    panX=mid.mx-(mid.mx-touchPanX)*(newZoom/pinchStartZoom);
-    panY=mid.my-(mid.my-touchPanY)*(newZoom/pinchStartZoom);
+    const scale=dist/pinchStartDist;
+    const newZoom=Math.max(0.05,Math.min(80,pinchStartZoom*scale));
+    // current midpoint in screen coords
+    const curMidX=(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left;
+    const curMidY=(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top;
+    // zoom around start midpoint, then pan to follow current midpoint
+    panX=curMidX-(pinchMidX-pinchStartPanX)*scale;
+    panY=curMidY-(pinchMidY-pinchStartPanY)*scale;
     zoom=newZoom;
     drawMap();drawMinimap();
   }
@@ -814,7 +816,6 @@ mapWrap.addEventListener('touchend',e=>{
       if(routeMode){
         selectRoutePlayer(tile.pid);
       } else {
-        // Show tooltip on tap
         const p=players[tile.pidIdx]||{};
         const tt=document.getElementById('touch-tooltip');
         tt.querySelector('.tname').textContent=p.name||'[unknown]';
@@ -822,7 +823,6 @@ mapWrap.addEventListener('touchend',e=>{
         tt.querySelector('.thq').textContent=tile.isHQ?'⌂ Headquarters':'';
         tt.style.display='block';
         setTimeout(()=>tt.style.display='none',2500);
-        jumpToPlayer(tile.pid);
       }
     }
   }
