@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SUI Turf Map — Sir Caprice</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -123,6 +124,34 @@ button:disabled{opacity:0.4;cursor:default}
 #refresh-box input::placeholder{color:#444}
 .modal-btns{display:flex;gap:8px;justify-content:flex-end}
 #refresh-result{font-size:12px;margin-top:8px;min-height:18px}
+
+/* ── MOBILE ── */
+#sidebar-toggle{display:none;position:absolute;bottom:14px;left:14px;z-index:30;width:44px;height:44px;padding:0;font-size:18px;border-radius:50%;background:#1a1a2e;border:1px solid #444}
+#sidebar-toggle.open{background:#185FA5;border-color:#378ADD}
+#touch-tooltip{position:absolute;display:none;background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:10px 14px;font-size:13px;z-index:50;pointer-events:none;line-height:1.8;max-width:220px;left:50%;transform:translateX(-50%);bottom:80px}
+#touch-tooltip .tname{font-weight:500;color:#fff;font-size:14px}
+#touch-tooltip .tpos{color:#888}
+#touch-tooltip .thq{color:#c4b5fd;font-size:12px}
+
+@media (max-width: 700px){
+  #toolbar{padding:8px 10px;gap:6px}
+  #toolbar h1{display:none}
+  .sep{display:none}
+  #age{display:none}
+  #route-indicator{display:none!important}
+  #tl-label{display:none}
+  #tl-count{display:none}
+  #timeline-bar{padding:6px 10px;gap:6px}
+  #sidebar{position:absolute;right:0;top:0;bottom:0;z-index:20;transform:translateX(100%);transition:transform 0.25s ease;box-shadow:-4px 0 20px rgba(0,0,0,0.5)}
+  #sidebar.open{transform:translateX(0)}
+  #sidebar-toggle{display:flex;align-items:center;justify-content:center}
+  #route-panel{left:8px;right:8px;max-width:none;bottom:70px}
+  #minimap-canvas{width:120px;height:120px;bottom:70px;right:8px}
+  #zoom-btns{top:auto;bottom:70px;right:136px}
+  #me-btn{bottom:70px;left:8px;top:auto}
+  button{padding:6px 10px;font-size:13px}
+  #zoom-btns button{width:40px;height:40px;font-size:20px}
+}
 </style>
 </head>
 <body>
@@ -162,6 +191,8 @@ button:disabled{opacity:0.4;cursor:default}
       <button onclick="resetView()" style="font-size:11px">⊡</button>
     </div>
     <button id="me-btn" onclick="jumpToMe()" style="font-size:11px">★ Me</button>
+    <button id="sidebar-toggle" onclick="toggleSidebar()" title="Player list">☰</button>
+    <div id="touch-tooltip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div></div>
     <div id="route-panel">
       <h3>🗺 Shortest route</h3>
       <div class="route-player">
@@ -699,6 +730,112 @@ mapWrap.addEventListener('contextmenu',e=>{
   if(idx!==undefined) showNeighborPopup(tiles[idx].pid,e.clientX,e.clientY);
 });
 mapWrap.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';});
+
+// ── TOUCH EVENTS ──────────────────────────────────────────────────────────────
+let touch1={x:0,y:0}, touch2={x:0,y:0};
+let touchPanX=0, touchPanY=0;
+let pinchStartDist=0, pinchStartZoom=0;
+let touchMoved=false, longPressTimer=null;
+const LONG_PRESS_MS=500;
+
+function touchDist(t1,t2){
+  return Math.hypot(t1.clientX-t2.clientX,t1.clientY-t2.clientY);
+}
+function touchMid(t1,t2,rect){
+  return {mx:(t1.clientX+t2.clientX)/2-rect.left, my:(t1.clientY+t2.clientY)/2-rect.top};
+}
+
+mapWrap.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  document.getElementById('touch-tooltip').style.display='none';
+  touchMoved=false;
+  clearTimeout(longPressTimer);
+
+  if(e.touches.length===1){
+    const t=e.touches[0];
+    touch1={x:t.clientX,y:t.clientY};
+    touchPanX=panX; touchPanY=panY;
+
+    // Long press → neighbor popup
+    longPressTimer=setTimeout(()=>{
+      if(!touchMoved){
+        const rect=mapWrap.getBoundingClientRect();
+        const {wx,wy}=screenToWorld(touch1.x-rect.left,touch1.y-rect.top);
+        const idx=tileMap.get(`${wx},${wy}`);
+        if(idx!==undefined) showNeighborPopup(tiles[idx].pid,touch1.x,touch1.y);
+      }
+    },LONG_PRESS_MS);
+  } else if(e.touches.length===2){
+    clearTimeout(longPressTimer);
+    pinchStartDist=touchDist(e.touches[0],e.touches[1]);
+    pinchStartZoom=zoom;
+    const rect=mapWrap.getBoundingClientRect();
+    const mid=touchMid(e.touches[0],e.touches[1],rect);
+    touch1={x:e.touches[0].clientX,y:e.touches[1].clientY};
+    touch2={x:mid.mx,y:mid.my};
+    touchPanX=panX; touchPanY=panY;
+  }
+},{passive:false});
+
+mapWrap.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  clearTimeout(longPressTimer);
+  touchMoved=true;
+  document.getElementById('touch-tooltip').style.display='none';
+
+  if(e.touches.length===1){
+    const t=e.touches[0];
+    panX=touchPanX+(t.clientX-touch1.x);
+    panY=touchPanY+(t.clientY-touch1.y);
+    drawMap();drawMinimap();
+  } else if(e.touches.length===2){
+    const rect=mapWrap.getBoundingClientRect();
+    const dist=touchDist(e.touches[0],e.touches[1]);
+    const mid=touchMid(e.touches[0],e.touches[1],rect);
+    const f=dist/pinchStartDist;
+    const newZoom=Math.max(0.05,Math.min(80,pinchStartZoom*f));
+    panX=mid.mx-(mid.mx-touchPanX)*(newZoom/pinchStartZoom);
+    panY=mid.my-(mid.my-touchPanY)*(newZoom/pinchStartZoom);
+    zoom=newZoom;
+    drawMap();drawMinimap();
+  }
+},{passive:false});
+
+mapWrap.addEventListener('touchend',e=>{
+  e.preventDefault();
+  clearTimeout(longPressTimer);
+  if(!touchMoved&&e.changedTouches.length===1){
+    const t=e.changedTouches[0];
+    const rect=mapWrap.getBoundingClientRect();
+    const {wx,wy}=screenToWorld(t.clientX-rect.left,t.clientY-rect.top);
+    const idx=tileMap.get(`${wx},${wy}`);
+    if(idx!==undefined){
+      const tile=tiles[idx];
+      if(routeMode){
+        selectRoutePlayer(tile.pid);
+      } else {
+        // Show tooltip on tap
+        const p=players[tile.pidIdx]||{};
+        const tt=document.getElementById('touch-tooltip');
+        tt.querySelector('.tname').textContent=p.name||'[unknown]';
+        tt.querySelector('.tpos').textContent=`Position: (${wx}, ${wy})`;
+        tt.querySelector('.thq').textContent=tile.isHQ?'⌂ Headquarters':'';
+        tt.style.display='block';
+        setTimeout(()=>tt.style.display='none',2500);
+        jumpToPlayer(tile.pid);
+      }
+    }
+  }
+},{passive:false});
+
+// ── SIDEBAR TOGGLE (mobile) ───────────────────────────────────────────────────
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const btn=document.getElementById('sidebar-toggle');
+  const isOpen=sb.classList.toggle('open');
+  btn.classList.toggle('open',isOpen);
+  btn.textContent=isOpen?'✕':'☰';
+}
 
 document.getElementById('minimap-canvas').addEventListener('click',e=>{
   if(!tiles.length) return;
