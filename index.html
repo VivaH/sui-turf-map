@@ -7,21 +7,29 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#0a0a0e;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
+/* ── TOOLBAR ── */
 #toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 14px;background:#0f0f15;border-bottom:1px solid #1e1e2e;flex-shrink:0}
 #toolbar h1{font-size:15px;font-weight:500;color:#fff;white-space:nowrap;margin-right:4px}
 button{cursor:pointer;padding:5px 13px;background:#1e1e2e;border:1px solid #333;border-radius:7px;color:#ccc;font-size:12px}
 button:hover{background:#2a2a3e;color:#fff}
 button.primary{background:#185FA5;border-color:#378ADD;color:#fff}
 button.primary:hover{background:#378ADD}
+button.active{background:#0c3a1a;border-color:#1D9E75;color:#9FE1CB}
 button:disabled{opacity:0.4;cursor:default}
 .sep{width:1px;height:20px;background:#2a2a3e;flex-shrink:0}
 #status{font-size:11px;color:#555;padding:4px 10px;background:#0f0f15;border:1px solid #1e1e2e;border-radius:6px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #age{font-size:11px;color:#444;white-space:nowrap}
 
+/* ── ROUTE MODE INDICATOR ── */
+#route-indicator{display:none;font-size:11px;padding:4px 10px;background:#0c1e10;border:1px solid #1D9E75;border-radius:6px;color:#9FE1CB;white-space:nowrap}
+
+/* ── MAIN ── */
 #main{display:flex;flex:1;overflow:hidden}
 
+/* ── MAP ── */
 #map-wrap{flex:1;position:relative;overflow:hidden;background:#080810;cursor:grab}
 #map-wrap.dragging{cursor:grabbing}
+#map-wrap.route-mode{cursor:crosshair}
 #map{display:block}
 #minimap-canvas{position:absolute;bottom:14px;right:14px;border:1px solid #333;border-radius:6px;background:#0a0a14;cursor:pointer}
 #tip{position:absolute;display:none;background:#1a1a2e;border:1px solid #444;border-radius:8px;padding:8px 12px;font-size:12px;z-index:50;pointer-events:none;line-height:1.7;max-width:240px}
@@ -32,6 +40,23 @@ button:disabled{opacity:0.4;cursor:default}
 #zoom-btns button{width:32px;height:32px;padding:0;font-size:16px;line-height:1}
 #me-btn{position:absolute;top:12px;left:12px}
 
+/* ── ROUTE RESULT PANEL ── */
+#route-panel{position:absolute;bottom:14px;left:14px;background:#0f0f1e;border:1px solid #2a2a4e;border-radius:10px;padding:12px 16px;min-width:240px;max-width:300px;display:none;z-index:40}
+#route-panel h3{font-size:12px;font-weight:500;color:#9d8fff;margin-bottom:10px}
+.route-player{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+.route-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.route-name{color:#fff;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route-stats{margin-top:10px;border-top:1px solid #2a2a4e;padding-top:8px;font-size:11px}
+.route-stat-row{display:flex;justify-content:space-between;padding:2px 0}
+.route-stat-label{color:#666}
+.route-stat-val{font-weight:500}
+.route-stat-val.conquer{color:#E24B4A}
+.route-stat-val.free{color:#1D9E75}
+.route-stat-val.own{color:#7F77DD}
+#route-panel button{margin-top:8px;width:100%;font-size:11px}
+#route-no-path{color:#E24B4A;font-size:11px;display:none}
+
+/* ── SIDEBAR ── */
 #sidebar{width:280px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid #1e1e2e;background:#0d0d14;overflow:hidden}
 #sidebar-head{padding:10px 12px;border-bottom:1px solid #1e1e2e;flex-shrink:0}
 .stats-row{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap}
@@ -44,23 +69,44 @@ button:disabled{opacity:0.4;cursor:default}
 .fb.on{border-color:#378ADD;color:#378ADD;background:#081828}
 #player-list{flex:1;overflow-y:auto;font-size:12px}
 #player-list::-webkit-scrollbar{width:4px}
-#player-list::-webkit-scrollbar-track{background:#0a0a0e}
 #player-list::-webkit-scrollbar-thumb{background:#2a2a3e;border-radius:2px}
-.prow{display:flex;align-items:center;gap:6px;padding:5px 12px;border-bottom:1px solid #0f0f18;cursor:pointer;transition:background 0.1s}
+.prow{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 12px;border-bottom:1px solid #0f0f18;cursor:pointer}
 .prow:hover{background:#141422}
 .prow.active{background:#0c1e30;border-left:2px solid #378ADD}
 .prow.me{border-left:2px solid #7F77DD}
+.prow.route-a{background:#0a1a0a;border-left:2px solid #1D9E75}
+.prow.route-b{background:#1a0a0a;border-left:2px solid #E24B4A}
 .prank{color:#333;font-size:10px;width:22px;text-align:right;flex-shrink:0}
 .pdot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
-.pname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc}
+.pname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc;font-size:12px}
 .pname.me{color:#9d8fff}
 .pname.unnamed{color:#444;font-style:italic}
-.ptiles{color:#555;font-size:11px;flex-shrink:0}
+.ptiles{color:#555;font-size:11px;flex-shrink:0;margin-right:4px}
 .pbar{width:40px;height:3px;background:#1a1a2a;border-radius:2px;flex-shrink:0}
 .pbar-fill{height:3px;border-radius:2px}
+.p-route-btn{width:18px;height:18px;padding:0;font-size:10px;border-radius:4px;flex-shrink:0;line-height:18px;text-align:center;display:none;background:#1a1a2a;border-color:#333}
+.route-mode-active .p-route-btn{display:block}
 
-/* Refresh modal */
-#refresh-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center}
+/* ── NEIGHBOR POPUP ── */
+#neighbor-popup{position:fixed;background:#0f0f1e;border:1px solid #2a2a4e;border-radius:10px;padding:0;min-width:220px;max-width:280px;max-height:400px;display:none;z-index:200;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.5)}
+#neighbor-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #1e1e2e;background:#0a0a14}
+#neighbor-head h3{font-size:12px;font-weight:500;color:#ccc}
+#neighbor-close{background:transparent;border:none;color:#555;font-size:16px;cursor:pointer;padding:0;line-height:1}
+#neighbor-close:hover{color:#ccc;background:transparent}
+#neighbor-list{overflow-y:auto;max-height:320px}
+#neighbor-list::-webkit-scrollbar{width:4px}
+#neighbor-list::-webkit-scrollbar-thumb{background:#2a2a3e;border-radius:2px}
+.nrow{display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid #0f0f18;cursor:pointer;font-size:12px}
+.nrow:hover{background:#141422}
+.ndot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.nname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#ccc}
+.nname.unnamed{color:#444;font-style:italic}
+.ncontact{font-size:10px;color:#555;flex-shrink:0}
+.nroute{font-size:10px;padding:2px 6px;border-radius:4px;flex-shrink:0;background:#1a1a2a;border-color:#333;color:#888}
+.nroute:hover{background:#185FA5;border-color:#378ADD;color:#fff}
+
+/* ── REFRESH MODAL ── */
+#refresh-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:300;align-items:center;justify-content:center}
 #refresh-modal.open{display:flex}
 #refresh-box{background:#1a1a2e;border:1px solid #444;border-radius:12px;padding:24px;width:400px;max-width:90vw}
 #refresh-box h2{font-size:15px;font-weight:500;margin-bottom:12px;color:#fff}
@@ -76,7 +122,10 @@ button:disabled{opacity:0.4;cursor:default}
 <div id="toolbar">
   <h1>SUI Turf Map</h1>
   <button class="primary" onclick="loadData()">↺ Reload</button>
-  <button onclick="openRefreshModal()" title="Trigger GitHub Actions to refresh blockchain data" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
+  <button onclick="openRefreshModal()" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
+  <div class="sep"></div>
+  <button id="route-btn" onclick="toggleRouteMode()" title="Find shortest route between two players">🗺 Route</button>
+  <span id="route-indicator">Click a tile or player to select A → B</span>
   <div class="sep"></div>
   <button onclick="exportPNG()">⬇ PNG</button>
   <button onclick="exportCSV()" id="csvBtn" style="display:none">⬇ CSV</button>
@@ -91,11 +140,45 @@ button:disabled{opacity:0.4;cursor:default}
     <canvas id="minimap-canvas" width="180" height="180" title="Click to navigate"></canvas>
     <div id="tip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div></div>
     <div id="zoom-btns">
-      <button onclick="zoomBy(1.3)" title="Zoom in">+</button>
-      <button onclick="zoomBy(0.77)" title="Zoom out">−</button>
-      <button onclick="resetView()" title="Full overview" style="font-size:11px">⊡</button>
+      <button onclick="zoomBy(1.3)">+</button>
+      <button onclick="zoomBy(0.77)">−</button>
+      <button onclick="resetView()" style="font-size:11px">⊡</button>
     </div>
-    <button id="me-btn" onclick="jumpToMe()" title="Jump to my territory" style="font-size:11px">★ Me</button>
+    <button id="me-btn" onclick="jumpToMe()" style="font-size:11px">★ Me</button>
+
+    <!-- Route result -->
+    <div id="route-panel">
+      <h3>🗺 Shortest route</h3>
+      <div class="route-player">
+        <div class="route-dot" id="rp-dot-a" style="background:#1D9E75"></div>
+        <div class="route-name" id="rp-name-a">—</div>
+      </div>
+      <div style="font-size:10px;color:#444;padding-left:18px;margin-bottom:4px">↓</div>
+      <div class="route-player">
+        <div class="route-dot" id="rp-dot-b" style="background:#E24B4A"></div>
+        <div class="route-name" id="rp-name-b">—</div>
+      </div>
+      <div id="route-no-path">No path found between these players.</div>
+      <div class="route-stats" id="route-stats" style="display:none">
+        <div class="route-stat-row">
+          <span class="route-stat-label">Total steps</span>
+          <span class="route-stat-val" id="rs-total">—</span>
+        </div>
+        <div class="route-stat-row">
+          <span class="route-stat-label">Your tiles (free)</span>
+          <span class="route-stat-val own" id="rs-own">—</span>
+        </div>
+        <div class="route-stat-row">
+          <span class="route-stat-label">Empty tiles (expand)</span>
+          <span class="route-stat-val free" id="rs-empty">—</span>
+        </div>
+        <div class="route-stat-row">
+          <span class="route-stat-label">To conquer</span>
+          <span class="route-stat-val conquer" id="rs-conquer">—</span>
+        </div>
+      </div>
+      <button onclick="clearRoute()">✕ Clear route</button>
+    </div>
   </div>
 
   <div id="sidebar">
@@ -116,6 +199,15 @@ button:disabled{opacity:0.4;cursor:default}
   </div>
 </div>
 
+<!-- Neighbor popup -->
+<div id="neighbor-popup">
+  <div id="neighbor-head">
+    <h3 id="neighbor-title">Neighbors</h3>
+    <button id="neighbor-close" onclick="closeNeighborPopup()">✕</button>
+  </div>
+  <div id="neighbor-list"></div>
+</div>
+
 <!-- Refresh modal -->
 <div id="refresh-modal">
   <div id="refresh-box">
@@ -125,7 +217,7 @@ button:disabled{opacity:0.4;cursor:default}
     <a href="https://github.com/settings/tokens/new?scopes=workflow&description=SUI+Turf+Map" target="_blank" style="color:#378ADD;font-size:11px">Create token on GitHub →</a></p>
     <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx">
     <p style="font-size:11px;color:#555">Repository (owner/repo):</p>
-    <input type="text" id="gh-repo" placeholder="your-username/sui-turf-map" value="">
+    <input type="text" id="gh-repo" placeholder="your-username/sui-turf-map" value="VivaH/sui-turf-map">
     <div id="refresh-result"></div>
     <div class="modal-btns">
       <button onclick="closeRefreshModal()">Cancel</button>
@@ -135,50 +227,61 @@ button:disabled{opacity:0.4;cursor:default}
 </div>
 
 <script>
+// ── CONSTANTS ─────────────────────────────────────────────────────────────────
 const MY_IDS = new Set([
   '0x857e8e7fc94d43f327bb24388439d0fdcc112a9e5e25264969b27011a233d2f0',
   '0xdb2b57ea07dae7acd91d56f4c5e20a077313abb50a9924f84529ef67030ab273',
 ]);
 const CELL = 12;
+const DIRS8 = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
 
+// ── STATE ─────────────────────────────────────────────────────────────────────
 let tiles=[], tileMap=new Map(), players=[], filteredPlayers=[];
+let neighborMap=new Map(); // pid → Map(neighborPid → contactCount)
 let activeFilter='all', highlightPid=null;
 let totalTiles=0, unclaimedTiles=0;
 let minX=0,maxX=0,minY=0,maxY=0;
 let panX=0,panY=0,zoom=1;
 let dragging=false,dragStartX=0,dragStartY=0,dragPanX=0,dragPanY=0;
 
+// Route state
+let routeMode=false;
+let routePidA=null, routePidB=null;
+let routePath=null; // [{x,y,type}] type: 'own'|'empty'|'conquer'|'target'
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
 function status(s){document.getElementById('status').textContent=s;}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
 // ── LOAD DATA.JSON ────────────────────────────────────────────────────────────
 async function loadData(){
   status('Loading data.json...');
-  tiles=[]; tileMap.clear(); players=[]; filteredPlayers=[];
+  tiles=[]; tileMap.clear(); players=[]; filteredPlayers=[]; neighborMap.clear();
+  clearRoute();
 
   try{
-    const resp = await fetch('data.json?t='+Date.now());
+    const resp=await fetch('data.json?t='+Date.now());
     if(!resp.ok) throw new Error('data.json not found (HTTP '+resp.status+')');
-    const d = await resp.json();
+    const d=await resp.json();
 
-    // Age indicator
-    const gen = new Date(d.generated);
-    const ageMin = Math.round((Date.now()-gen)/60000);
-    const ageStr = ageMin < 60
-      ? `${ageMin}m ago`
-      : `${Math.round(ageMin/60)}h ago`;
-    document.getElementById('age').textContent = `Data: ${ageStr}`;
+    const gen=new Date(d.generated);
+    const ageMin=Math.round((Date.now()-gen)/60000);
+    document.getElementById('age').textContent=`Data: ${ageMin<60?ageMin+'m':Math.round(ageMin/60)+'h'} ago`;
 
-    totalTiles    = d.total_tiles || 0;
-    unclaimedTiles= d.unclaimed  || 0;
-    players       = d.players    || [];
+    totalTiles=d.total_tiles||0;
+    unclaimedTiles=d.unclaimed||0;
+    players=d.players||[];
 
-    // Build tile array
+    // Build pid→playerIndex map
+    const pidToIdx=new Map();
+    players.forEach((p,i)=>pidToIdx.set(p.pid,i));
+
     for(const t of (d.tiles||[])){
-      const p = players[t.p];
+      const p=players[t.p];
       if(!p) continue;
-      const isMe = MY_IDS.has(p.pid);
-      tiles.push({x:t.x, y:t.y, pid:p.pid, isHQ:!!t.hq, isMe, color:p.color});
-      tileMap.set(`${t.x},${t.y}`, tiles.length-1);
+      const isMe=MY_IDS.has(p.pid);
+      tiles.push({x:t.x,y:t.y,pid:p.pid,isHQ:!!t.hq,isMe,color:p.color,pidIdx:t.p});
+      tileMap.set(`${t.x},${t.y}`,tiles.length-1);
     }
 
     if(tiles.length){
@@ -187,6 +290,9 @@ async function loadData(){
       minY=Math.min(...tiles.map(t=>t.y));
       maxY=Math.max(...tiles.map(t=>t.y));
     }
+
+    // Precompute neighbor map
+    computeNeighborMap();
 
     updateStats();
     filterPlayers();
@@ -201,6 +307,301 @@ async function loadData(){
     status('Error: '+e.message);
     document.getElementById('age').textContent='';
   }
+}
+
+// ── NEIGHBOR MAP ──────────────────────────────────────────────────────────────
+function computeNeighborMap(){
+  neighborMap.clear();
+  for(const t of tiles){
+    for(const [dx,dy] of DIRS8){
+      const nidx=tileMap.get(`${t.x+dx},${t.y+dy}`);
+      if(nidx===undefined) continue;
+      const nt=tiles[nidx];
+      if(nt.pid===t.pid) continue;
+      if(!neighborMap.has(t.pid)) neighborMap.set(t.pid,new Map());
+      const m=neighborMap.get(t.pid);
+      m.set(nt.pid,(m.get(nt.pid)||0)+1);
+    }
+  }
+}
+
+// ── A* PATHFINDING ────────────────────────────────────────────────────────────
+class MinHeap{
+  constructor(){this.h=[];}
+  push(item){this.h.push(item);this._up(this.h.length-1);}
+  pop(){
+    const top=this.h[0],last=this.h.pop();
+    if(this.h.length>0){this.h[0]=last;this._down(0);}
+    return top;
+  }
+  _up(i){
+    while(i>0){
+      const p=(i-1)>>1;
+      if(this.h[p][0]<=this.h[i][0]) break;
+      [this.h[p],this.h[i]]=[this.h[i],this.h[p]];i=p;
+    }
+  }
+  _down(i){
+    const n=this.h.length;
+    while(true){
+      let m=i,l=2*i+1,r=2*i+2;
+      if(l<n&&this.h[l][0]<this.h[m][0])m=l;
+      if(r<n&&this.h[r][0]<this.h[m][0])m=r;
+      if(m===i) break;
+      [this.h[m],this.h[i]]=[this.h[i],this.h[m]];i=m;
+    }
+  }
+  get size(){return this.h.length;}
+}
+
+function findRoute(pidA, pidB){
+  const tilesA=tiles.filter(t=>t.pid===pidA);
+  const tilesB=tiles.filter(t=>t.pid===pidB);
+  if(!tilesA.length||!tilesB.length) return null;
+
+  // Bounding box of B for fast heuristic
+  const bx0=Math.min(...tilesB.map(t=>t.x)), bx1=Math.max(...tilesB.map(t=>t.x));
+  const by0=Math.min(...tilesB.map(t=>t.y)), by1=Math.max(...tilesB.map(t=>t.y));
+
+  function heuristic(x,y){
+    const dx=Math.max(0,bx0-x,x-bx1);
+    const dy=Math.max(0,by0-y,y-by1);
+    return Math.max(dx,dy);
+  }
+
+  // Find closest tile of A to center of B as start
+  const cxB=(bx0+bx1)/2, cyB=(by0+by1)/2;
+  let startTile=tilesA[0], bestD=Infinity;
+  for(const t of tilesA){
+    const d=Math.max(Math.abs(t.x-cxB),Math.abs(t.y-cyB));
+    if(d<bestD){bestD=d;startTile=t;}
+  }
+
+  const targetSet=new Set(tilesB.map(t=>`${t.x},${t.y}`));
+
+  const gScore=new Map();
+  const cameFrom=new Map();
+  const heap=new MinHeap();
+
+  const sk=`${startTile.x},${startTile.y}`;
+  gScore.set(sk,0);
+  heap.push([heuristic(startTile.x,startTile.y),startTile.x,startTile.y]);
+
+  // Search bounds with margin
+  const bndX0=Math.min(minX,bx0)-5, bndX1=Math.max(maxX,bx1)+5;
+  const bndY0=Math.min(minY,by0)-5, bndY1=Math.max(maxY,by1)+5;
+  const MAX_ITER=200000;
+  let iter=0;
+
+  while(heap.size>0&&iter++<MAX_ITER){
+    const [f,x,y]=heap.pop();
+    const key=`${x},${y}`;
+    const g=gScore.get(key);
+    if(g===undefined||f>g+heuristic(x,y)+0.001) continue;
+
+    if(targetSet.has(key)){
+      // Reconstruct path with tile types
+      const path=[];
+      let cur=key;
+      while(cur){
+        const [cx,cy]=cur.split(',').map(Number);
+        const tidx=tileMap.get(cur);
+        let type='empty';
+        if(targetSet.has(cur)) type='target';
+        else if(tidx!==undefined){
+          const t=tiles[tidx];
+          type=t.pid===pidA?'own':'conquer';
+        }
+        path.unshift({x:cx,y:cy,type});
+        cur=cameFrom.get(cur);
+      }
+      return path;
+    }
+
+    for(const [dx,dy] of DIRS8){
+      const nx=x+dx,ny=y+dy;
+      if(nx<bndX0||nx>bndX1||ny<bndY0||ny>bndY1) continue;
+      const nkey=`${nx},${ny}`;
+      const ng=g+1;
+      if(gScore.has(nkey)&&gScore.get(nkey)<=ng) continue;
+      gScore.set(nkey,ng);
+      cameFrom.set(nkey,key);
+      heap.push([ng+heuristic(nx,ny),nx,ny]);
+    }
+  }
+  return null;
+}
+
+// ── ROUTE MODE ────────────────────────────────────────────────────────────────
+function toggleRouteMode(){
+  routeMode=!routeMode;
+  const btn=document.getElementById('route-btn');
+  const ind=document.getElementById('route-indicator');
+  const mw=document.getElementById('map-wrap');
+  const pl=document.getElementById('player-list');
+
+  if(routeMode){
+    btn.classList.add('active');
+    ind.style.display='';
+    mw.classList.add('route-mode');
+    pl.classList.add('route-mode-active');
+    updateRouteIndicator();
+  } else {
+    btn.classList.remove('active');
+    ind.style.display='none';
+    mw.classList.remove('route-mode');
+    pl.classList.remove('route-mode-active');
+    clearRoute();
+  }
+}
+
+function updateRouteIndicator(){
+  const ind=document.getElementById('route-indicator');
+  if(!routeMode){ind.style.display='none';return;}
+  if(!routePidA) ind.textContent='Click tile or player → select A (start)';
+  else if(!routePidB) ind.textContent='Select B (destination) — A selected';
+  else ind.textContent='Route shown below';
+}
+
+function selectRoutePlayer(pid){
+  if(!routeMode) return;
+  if(!routePidA||routePidA===pid){
+    routePidA=pid;
+    routePidB=null;
+    routePath=null;
+  } else {
+    routePidB=pid;
+    computeAndShowRoute();
+  }
+  updateRouteIndicator();
+  renderPlayerList();
+  drawMap();
+}
+
+function computeAndShowRoute(){
+  if(!routePidA||!routePidB) return;
+  status('Computing route...');
+  // Run async so UI updates first
+  setTimeout(()=>{
+    routePath=findRoute(routePidA,routePidB);
+    showRoutePanel();
+    drawMap();
+    if(routePath) zoomToRoute();
+    status(`${players.length} players · ${tiles.length} tiles`);
+  },50);
+}
+
+function showRoutePanel(){
+  const panel=document.getElementById('route-panel');
+  panel.style.display='block';
+
+  const pA=players.find(p=>p.pid===routePidA)||{};
+  const pB=players.find(p=>p.pid===routePidB)||{};
+  document.getElementById('rp-name-a').textContent=pA.name||'[unknown]';
+  document.getElementById('rp-name-b').textContent=pB.name||'[unknown]';
+  document.getElementById('rp-dot-a').style.background=pA.color||'#1D9E75';
+  document.getElementById('rp-dot-b').style.background=pB.color||'#E24B4A';
+
+  const noPath=document.getElementById('route-no-path');
+  const stats=document.getElementById('route-stats');
+
+  if(!routePath){
+    noPath.style.display='block';
+    stats.style.display='none';
+    return;
+  }
+  noPath.style.display='none';
+  stats.style.display='block';
+
+  const own=routePath.filter(s=>s.type==='own').length;
+  const empty=routePath.filter(s=>s.type==='empty').length;
+  const conquer=routePath.filter(s=>s.type==='conquer').length;
+  document.getElementById('rs-total').textContent=routePath.length;
+  document.getElementById('rs-own').textContent=own;
+  document.getElementById('rs-empty').textContent=empty;
+  document.getElementById('rs-conquer').textContent=conquer;
+}
+
+function clearRoute(){
+  routePidA=null;routePidB=null;routePath=null;
+  document.getElementById('route-panel').style.display='none';
+  document.getElementById('route-stats').style.display='none';
+  document.getElementById('route-no-path').style.display='none';
+  document.getElementById('rp-name-a').textContent='—';
+  document.getElementById('rp-name-b').textContent='—';
+  updateRouteIndicator();
+  renderPlayerList();
+  drawMap();
+}
+
+function zoomToRoute(){
+  if(!routePath||!routePath.length) return;
+  const xs=routePath.map(s=>s.x),ys=routePath.map(s=>s.y);
+  const rx0=Math.min(...xs),rx1=Math.max(...xs),ry0=Math.min(...ys),ry1=Math.max(...ys);
+  const cv=document.getElementById('map');
+  const spanX=rx1-rx0+1,spanY=ry1-ry0+1;
+  zoom=Math.max(0.5,Math.min(20,Math.min(cv.width/((spanX+10)*CELL),cv.height/((spanY+10)*CELL))));
+  const cx=(rx0+rx1)/2,cy=(ry0+ry1)/2;
+  panX=cv.width/2-(cx-minX)*CELL*zoom;
+  panY=cv.height/2-(maxY-cy)*CELL*zoom;
+  drawMap();drawMinimap();
+}
+
+// ── NEIGHBOR POPUP ────────────────────────────────────────────────────────────
+function showNeighborPopup(pid, screenX, screenY){
+  const popup=document.getElementById('neighbor-popup');
+  const nbrs=neighborMap.get(pid);
+  const p=players.find(pl=>pl.pid===pid)||{};
+
+  document.getElementById('neighbor-title').textContent=
+    `Neighbors of ${p.name||'[unknown]'} (${nbrs?nbrs.size:0})`;
+
+  const list=document.getElementById('neighbor-list');
+  if(!nbrs||nbrs.size===0){
+    list.innerHTML='<div style="padding:1rem;color:#555;font-size:12px">No neighboring players found.</div>';
+  } else {
+    const sorted=[...nbrs.entries()].sort((a,b)=>b[1]-a[1]);
+    list.innerHTML=sorted.map(([npid,cnt])=>{
+      const np=players.find(pl=>pl.pid===npid)||{};
+      const isMe=MY_IDS.has(npid);
+      return `<div class="nrow" onclick="onNeighborClick('${npid}')">
+        <div class="ndot" style="background:${np.color||'#666'}"></div>
+        <div class="nname${np.name?'':' unnamed'}${isMe?' me':''}">${esc(np.name||'[unknown]')}</div>
+        <div class="ncontact">${cnt} border${cnt>1?'s':''}</div>
+        <button class="nroute" onclick="onNeighborRoute('${pid}','${npid}',event)" title="Find route">→</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Position popup near click but keep on screen
+  popup.style.display='block';
+  const pw=popup.offsetWidth, ph=popup.offsetHeight;
+  const vw=window.innerWidth, vh=window.innerHeight;
+  let lx=screenX+12, ly=screenY-10;
+  if(lx+pw>vw-10) lx=screenX-pw-12;
+  if(ly+ph>vh-10) ly=vh-ph-10;
+  if(ly<10) ly=10;
+  popup.style.left=lx+'px';
+  popup.style.top=ly+'px';
+}
+
+function closeNeighborPopup(){
+  document.getElementById('neighbor-popup').style.display='none';
+}
+
+function onNeighborClick(pid){
+  closeNeighborPopup();
+  jumpToPlayer(pid);
+}
+
+function onNeighborRoute(pidA,pidB,e){
+  e.stopPropagation();
+  closeNeighborPopup();
+  routePidA=pidA;
+  routePidB=pidB;
+  if(!routeMode) toggleRouteMode();
+  computeAndShowRoute();
+  renderPlayerList();
 }
 
 // ── CANVAS ────────────────────────────────────────────────────────────────────
@@ -219,7 +620,16 @@ function screenToWorld(sx,sy){
   return {wx:Math.round((sx-panX)/(CELL*zoom)+minX), wy:Math.round(maxY-(sy-panY)/(CELL*zoom))};
 }
 
+// Route path lookup for fast drawing
+let routePathSet=null, routePathMap=null;
+function buildRouteStructures(){
+  if(!routePath){routePathSet=null;routePathMap=null;return;}
+  routePathSet=new Set(routePath.map(s=>`${s.x},${s.y}`));
+  routePathMap=new Map(routePath.map(s=>[`${s.x},${s.y}`,s.type]));
+}
+
 function drawMap(){
+  buildRouteStructures();
   const cv=document.getElementById('map');
   const ctx=cv.getContext('2d');
   const W=cv.width,H=cv.height;
@@ -231,6 +641,8 @@ function drawMap(){
   const wx1=Math.ceil((W-panX)/(CELL*zoom))+minX+1;
   const wy0=Math.floor(maxY-(H-panY)/(CELL*zoom))-1;
   const wy1=Math.ceil(maxY-(-panY)/(CELL*zoom))+1;
+
+  // Grid
   if(zoom>0.8){
     ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=0.5;
     for(let x=Math.max(minX,wx0);x<=Math.min(maxX+1,wx1);x++){
@@ -242,17 +654,58 @@ function drawMap(){
       ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(W,sy);ctx.stroke();
     }
   }
+
+  // Tiles
   for(const t of tiles){
     if(t.x<wx0||t.x>wx1||t.y<wy0||t.y>wy1) continue;
-    const sx=(t.x-minX)*cs+panX, sy=(maxY-t.y)*cs+panY;
-    ctx.fillStyle=highlightPid&&t.pid===highlightPid?'#ffe066'
-      :t.isHQ?(t.isMe?'#533AB7':'#6B1A1A'):t.color;
+    const sx=(t.x-minX)*cs+panX,sy=(maxY-t.y)*cs+panY;
+    const key=`${t.x},${t.y}`;
+    let col;
+    if(routePathMap&&routePathMap.has(key)){
+      const type=routePathMap.get(key);
+      col=type==='own'?'#7F77DD':type==='conquer'?'#E24B4A':type==='target'?'#1D9E75':t.color;
+    } else if(highlightPid&&t.pid===highlightPid){
+      col='#ffe066';
+    } else if(t.isHQ){
+      col=t.isMe?'#533AB7':'#6B1A1A';
+    } else {
+      col=t.color;
+    }
+    // Dim non-route tiles when route is active
+    if(routePath&&routePathMap&&!routePathMap.has(key)){
+      ctx.globalAlpha=0.35;
+    }
+    ctx.fillStyle=col;
     ctx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
+    ctx.globalAlpha=1;
+
     if(t.isHQ&&zoom>1.5){
       ctx.fillStyle='rgba(255,255,255,0.6)';
       ctx.font=`${Math.round(cs*0.6)}px sans-serif`;
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText('\u2302',sx+cs/2,sy+cs/2);
+    }
+  }
+
+  // Draw route path on empty tiles (not in tileMap)
+  if(routePath&&cs>=2){
+    for(const s of routePath){
+      if(s.x<wx0||s.x>wx1||s.y<wy0||s.y>wy1) continue;
+      if(tileMap.has(`${s.x},${s.y}`)) continue; // already drawn
+      const sx=(s.x-minX)*cs+panX,sy=(maxY-s.y)*cs+panY;
+      ctx.fillStyle=s.type==='target'?'#1D9E75':'rgba(200,200,255,0.4)';
+      ctx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
+    }
+  }
+
+  // Route start/end markers
+  if(routePath&&cs>=4){
+    const start=routePath[0],end=routePath[routePath.length-1];
+    for(const [s,col] of [[start,'#1D9E75'],[end,'#E24B4A']]){
+      if(!s||s.x<wx0||s.x>wx1||s.y<wy0||s.y>wy1) continue;
+      const sx=(s.x-minX)*cs+panX,sy=(maxY-s.y)*cs+panY;
+      ctx.strokeStyle=col;ctx.lineWidth=2;
+      ctx.strokeRect(sx+1,sy+1,cs-2,cs-2);
     }
   }
 }
@@ -267,13 +720,19 @@ function drawMinimap(){
   const sc=Math.min(MW/spanX,MH/spanY);
   const offX=(MW-spanX*sc)/2,offY=(MH-spanY*sc)/2;
   for(const t of tiles){
-    ctx.fillStyle=t.isMe?(t.isHQ?'#9d8fff':'#5b8fff'):t.color;
-    ctx.fillRect(offX+(t.x-minX)*sc, offY+(maxY-t.y)*sc, Math.max(1,sc-0.2),Math.max(1,sc-0.2));
+    const key=`${t.x},${t.y}`;
+    let col=t.isMe?(t.isHQ?'#9d8fff':'#5b8fff'):t.color;
+    if(routePathMap&&routePathMap.has(key)){
+      const type=routePathMap.get(key);
+      col=type==='own'?'#9d8fff':type==='conquer'?'#E24B4A':'#1D9E75';
+    }
+    ctx.fillStyle=col;
+    ctx.fillRect(offX+(t.x-minX)*sc,offY+(maxY-t.y)*sc,Math.max(1,sc-0.2),Math.max(1,sc-0.2));
   }
   const cv=document.getElementById('map');
   ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.lineWidth=1;
-  ctx.strokeRect(offX+(-panX/(CELL*zoom))*sc, offY+(-panY/(CELL*zoom))*sc,
-    (cv.width/(CELL*zoom))*sc, (cv.height/(CELL*zoom))*sc);
+  ctx.strokeRect(offX+(-panX/(CELL*zoom))*sc,offY+(-panY/(CELL*zoom))*sc,
+    (cv.width/(CELL*zoom))*sc,(cv.height/(CELL*zoom))*sc);
 }
 
 // ── ZOOM & PAN ────────────────────────────────────────────────────────────────
@@ -283,36 +742,84 @@ mapWrap.addEventListener('wheel',e=>{
   const f=e.deltaY<0?1.15:0.87;
   const rect=mapWrap.getBoundingClientRect();
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
-  panX=mx-(mx-panX)*f; panY=my-(my-panY)*f;
+  panX=mx-(mx-panX)*f;panY=my-(my-panY)*f;
   zoom=Math.max(0.05,Math.min(80,zoom*f));
   drawMap();drawMinimap();
 },{passive:false});
+
 mapWrap.addEventListener('mousedown',e=>{
-  dragging=true;dragStartX=e.clientX;dragStartY=e.clientY;dragPanX=panX;dragPanY=panY;
+  dragging=false;
+  dragStartX=e.clientX;dragStartY=e.clientY;dragPanX=panX;dragPanY=panY;
   mapWrap.classList.add('dragging');
 });
-window.addEventListener('mousemove',e=>{
-  if(dragging){panX=dragPanX+(e.clientX-dragStartX);panY=dragPanY+(e.clientY-dragStartY);drawMap();drawMinimap();}
+
+mapWrap.addEventListener('mousemove',e=>{
+  if(e.buttons===1){
+    const moved=Math.abs(e.clientX-dragStartX)+Math.abs(e.clientY-dragStartY);
+    if(moved>3){
+      dragging=true;
+      panX=dragPanX+(e.clientX-dragStartX);
+      panY=dragPanY+(e.clientY-dragStartY);
+      drawMap();drawMinimap();
+    }
+  }
+  // Tooltip
   if(!dragging&&tiles.length){
     const rect=mapWrap.getBoundingClientRect();
     const {wx,wy}=screenToWorld(e.clientX-rect.left,e.clientY-rect.top);
     const idx=tileMap.get(`${wx},${wy}`);
     const tip=document.getElementById('tip');
-    if(idx!==undefined){
+    if(idx!==undefined&&!routeMode){
       const t=tiles[idx];
-      const p=players[players.findIndex(pl=>pl.pid===t.pid)]||{};
+      const p=players[t.pidIdx]||{};
       tip.querySelector('.tname').textContent=p.name||'[unknown]';
       tip.querySelector('.tpos').textContent=`Position: (${wx}, ${wy})`;
       tip.querySelector('.thq').textContent=t.isHQ?'⌂ Headquarters':'';
       tip.style.display='block';
-      tip.style.left=(e.clientX-mapWrap.getBoundingClientRect().left+14)+'px';
-      tip.style.top=(e.clientY-mapWrap.getBoundingClientRect().top-8)+'px';
+      const r2=mapWrap.getBoundingClientRect();
+      tip.style.left=(e.clientX-r2.left+14)+'px';
+      tip.style.top=(e.clientY-r2.top-8)+'px';
     } else {tip.style.display='none';}
   }
 });
-window.addEventListener('mouseup',()=>{dragging=false;mapWrap.classList.remove('dragging');});
+
+mapWrap.addEventListener('mouseup',e=>{
+  mapWrap.classList.remove('dragging');
+  if(!dragging){
+    // It was a click
+    const rect=mapWrap.getBoundingClientRect();
+    const {wx,wy}=screenToWorld(e.clientX-rect.left,e.clientY-rect.top);
+    const idx=tileMap.get(`${wx},${wy}`);
+    if(idx!==undefined){
+      const t=tiles[idx];
+      if(routeMode){
+        selectRoutePlayer(t.pid);
+      } else if(e.button===2){
+        // Right click handled below
+      } else {
+        jumpToPlayer(t.pid);
+        // Show neighbors on double-click or right-click
+      }
+    }
+  }
+  dragging=false;
+});
+
+// Right-click on map → neighbor popup
+mapWrap.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  const rect=mapWrap.getBoundingClientRect();
+  const {wx,wy}=screenToWorld(e.clientX-rect.left,e.clientY-rect.top);
+  const idx=tileMap.get(`${wx},${wy}`);
+  if(idx!==undefined){
+    const t=tiles[idx];
+    showNeighborPopup(t.pid,e.clientX,e.clientY);
+  }
+});
+
 mapWrap.addEventListener('mouseleave',()=>{document.getElementById('tip').style.display='none';});
 
+// Minimap click
 document.getElementById('minimap-canvas').addEventListener('click',e=>{
   if(!tiles.length) return;
   const mc=document.getElementById('minimap-canvas');
@@ -337,10 +844,9 @@ function zoomBy(f){
 function resetView(){
   if(!tiles.length) return;
   const cv=document.getElementById('map');
-  const spanX=maxX-minX+1,spanY=maxY-minY+1;
-  zoom=Math.min(cv.width/(spanX*CELL),cv.height/(spanY*CELL))*0.9;
-  panX=(cv.width-spanX*CELL*zoom)/2;
-  panY=(cv.height-spanY*CELL*zoom)/2;
+  zoom=Math.min(cv.width/((maxX-minX+1)*CELL),cv.height/((maxY-minY+1)*CELL))*0.9;
+  panX=(cv.width-(maxX-minX+1)*CELL*zoom)/2;
+  panY=(cv.height-(maxY-minY+1)*CELL*zoom)/2;
   drawMap();drawMinimap();
 }
 function jumpToPlayer(pid){
@@ -353,7 +859,7 @@ function jumpToPlayer(pid){
   zoom=Math.max(0.2,Math.min(20,Math.min(cv.width/((bx1-bx0+7)*CELL),cv.height/((by1-by0+7)*CELL))));
   panX=cv.width/2-((bx0+bx1)/2-minX)*CELL*zoom;
   panY=cv.height/2-(maxY-(by0+by1)/2)*CELL*zoom;
-  highlightPid=pid; drawMap(); drawMinimap();
+  highlightPid=pid;drawMap();drawMinimap();
   setTimeout(()=>{highlightPid=null;drawMap();},2000);
 }
 function jumpToMe(){jumpToPlayer([...MY_IDS][0]);}
@@ -367,6 +873,7 @@ function updateStats(){
 let filterTimer=null;
 function filterPlayers(){clearTimeout(filterTimer);filterTimer=setTimeout(_fp,100);}
 function setFilter(f,btn){activeFilter=f;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');filterPlayers();}
+
 function _fp(){
   const q=document.getElementById('search').value.toLowerCase();
   filteredPlayers=players.filter(p=>{
@@ -375,20 +882,42 @@ function _fp(){
     if(q&&!p.name.toLowerCase().includes(q)&&!p.pid.includes(q)&&!(p.wallet||'').includes(q)) return false;
     return true;
   });
+  renderPlayerList();
+}
+
+function renderPlayerList(){
   const maxT=filteredPlayers.length?filteredPlayers[0].tiles:1;
   document.getElementById('player-list').innerHTML=filteredPlayers.map((p,i)=>{
     const me=MY_IDS.has(p.pid);
+    const isA=p.pid===routePidA,isB=p.pid===routePidB;
+    const rowCls=`prow${me?' me':''}${isA?' route-a':''}${isB?' route-b':''}`;
     const nm=p.name?`<span class="pname${me?' me':''}">${esc(p.name)}</span>`:`<span class="pname unnamed">[unknown]</span>`;
-    return `<div class="prow${me?' me':''}" onclick="onPClick('${p.pid}',event)">
+    const routeLabel=isA?'A':isB?'B':'→';
+    return `<div class="${rowCls}" onclick="onPClick('${p.pid}',event)">
       <span class="prank">${i+1}</span>
       <span class="pdot" style="background:${p.color}"></span>
       ${nm}
       <span class="ptiles">${p.tiles.toLocaleString('en')}</span>
       <div class="pbar"><div class="pbar-fill" style="width:${Math.round(p.tiles/maxT*100)}%;background:${p.color}"></div></div>
+      <button class="p-route-btn" onclick="onRouteBtn('${p.pid}',event)" title="Set as route point">${routeLabel}</button>
     </div>`;
   }).join('')||'<div style="color:#444;padding:1rem;font-size:12px">No results</div>';
 }
-function onPClick(pid,e){jumpToPlayer(pid);document.querySelectorAll('.prow').forEach(r=>r.classList.remove('active'));e.currentTarget.classList.add('active');}
+
+function onPClick(pid,e){
+  if(e.target.classList.contains('p-route-btn')) return;
+  if(routeMode){selectRoutePlayer(pid);return;}
+  jumpToPlayer(pid);
+  document.querySelectorAll('.prow').forEach(r=>r.classList.remove('active'));
+  e.currentTarget.classList.add('active');
+}
+
+function onRouteBtn(pid,e){
+  e.stopPropagation();
+  if(!routeMode){toggleRouteMode();}
+  selectRoutePlayer(pid);
+}
+
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 // ── EXPORT ────────────────────────────────────────────────────────────────────
@@ -413,13 +942,12 @@ function exportCSV(){
 // ── REFRESH MODAL ─────────────────────────────────────────────────────────────
 function openRefreshModal(){document.getElementById('refresh-modal').classList.add('open');}
 function closeRefreshModal(){document.getElementById('refresh-modal').classList.remove('open');document.getElementById('refresh-result').textContent='';}
-
 async function triggerRefresh(){
   const token=document.getElementById('gh-token').value.trim();
   const repo=document.getElementById('gh-repo').value.trim();
-  const resultEl=document.getElementById('refresh-result');
-  if(!token||!repo){resultEl.style.color='#E24B4A';resultEl.textContent='Please fill in both fields.';return;}
-  resultEl.style.color='#888';resultEl.textContent='Triggering workflow...';
+  const el=document.getElementById('refresh-result');
+  if(!token||!repo){el.style.color='#E24B4A';el.textContent='Please fill in both fields.';return;}
+  el.style.color='#888';el.textContent='Triggering workflow...';
   try{
     const r=await fetch(`https://api.github.com/repos/${repo}/actions/workflows/update.yml/dispatches`,{
       method:'POST',
@@ -427,20 +955,23 @@ async function triggerRefresh(){
       body:JSON.stringify({ref:'main'})
     });
     if(r.status===204){
-      resultEl.style.color='#1D9E75';
-      resultEl.textContent='✓ Workflow started! Data will update in ~10 minutes. Reload the page then.';
+      el.style.color='#1D9E75';
+      el.textContent='✓ Workflow started! Data will update in ~10 minutes.';
     } else {
       const d=await r.json();
-      resultEl.style.color='#E24B4A';
-      resultEl.textContent='Error '+r.status+': '+(d.message||'unknown');
+      el.style.color='#E24B4A';
+      el.textContent='Error '+r.status+': '+(d.message||'unknown');
     }
-  }catch(e){
-    resultEl.style.color='#E24B4A';
-    resultEl.textContent='Error: '+e.message;
-  }
+  }catch(e){el.style.color='#E24B4A';el.textContent='Error: '+e.message;}
 }
 document.getElementById('refresh-modal').addEventListener('click',e=>{
   if(e.target===document.getElementById('refresh-modal')) closeRefreshModal();
+});
+
+// Close neighbor popup on outside click
+document.addEventListener('click',e=>{
+  const popup=document.getElementById('neighbor-popup');
+  if(popup.style.display!=='none'&&!popup.contains(e.target)) closeNeighborPopup();
 });
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
