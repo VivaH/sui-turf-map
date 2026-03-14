@@ -168,7 +168,7 @@ button:disabled{opacity:0.4;cursor:default}
 <body>
 
 <div id="toolbar">
-  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.7</span>
+  <h1>SUI Turf Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v1.7b</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -734,6 +734,7 @@ function drawMap(){
       lx+=ctx.measureText(lbl).width+34;
     }
   }
+}
 
 function drawMinimap(){
   const mc=document.getElementById('minimap-canvas');
