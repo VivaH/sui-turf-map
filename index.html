@@ -176,7 +176,7 @@ button:disabled{opacity:0.4;cursor:default}
 <body>
 
 <div id="toolbar">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v2.2</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v2.3</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -1184,50 +1184,33 @@ function exportPNG(){
 
 async function exportGIF(){
   if(snapshots.length<2){alert('Need at least 2 snapshots to create an animation.');return;}
-  if(typeof GIF==='undefined'){alert('GIF library not loaded yet, please try again in a moment.');return;}
+  if(typeof GifEncoder==='undefined'&&typeof gifenc==='undefined'){alert('GIF library not loaded yet, please try again.');return;}
 
   const btn=document.getElementById('gifBtn');
   btn.disabled=true;
-  btn.textContent='⏳ Building GIF...';
 
   const cv=document.getElementById('map');
   const W=cv.width, H=cv.height;
-
-  // Use last 20 snapshots max, oldest first
-  const frames=snapshots.slice(0,Math.min(20,snapshots.length)).reverse();
-
-  const gif=new GIF({
-    workers:2,
-    quality:10,
-    width:Math.round(W/2),
-    height:Math.round(H/2),
-    workerScript:'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
-  });
-
-  const offscreen=document.createElement('canvas');
   const GW=Math.round(W/2), GH=Math.round(H/2);
+
+  const frames=snapshots.slice(0,Math.min(20,snapshots.length)).reverse();
+  const offscreen=document.createElement('canvas');
   offscreen.width=GW; offscreen.height=GH;
   const octx=offscreen.getContext('2d');
 
-  // Timeout: if encoding takes more than 90s, abort
-  let encodingDone=false;
-  const encodingTimeout=setTimeout(()=>{
-    if(!encodingDone){
-      btn.disabled=false;btn.textContent='🎬 GIF';
-      status('GIF encoding timed out — try fewer snapshots or zoom in more');
-    }
-  },90000);
-
-  status('Building GIF frames...');
+  // gifenc API
+  const {GIFEncoder,quantize,applyPalette}=gifenc;
+  const encoder=GIFEncoder();
 
   for(let i=0;i<frames.length;i++){
     const snap=frames[i];
     btn.textContent=`⏳ Frame ${i+1}/${frames.length}...`;
+    await new Promise(r=>setTimeout(r,5));
+
     try{
       const d=await fetch(snap.file+'?t='+Date.now()).then(r=>r.json());
-      // Build tile data for this snapshot
-      const snapTiles=[];
       const snapPlayers=d.players||[];
+      const snapTiles=[];
       for(const t of (d.tiles||[])){
         const p=snapPlayers[t.p]; if(!p) continue;
         const isMe=MY_IDS.has(p.pid);
@@ -1236,7 +1219,6 @@ async function exportGIF(){
         snapTiles.push({x:t.x,y:t.y,isHQ:!!t.hq,isMe,col});
       }
 
-      // Draw frame at half size
       octx.fillStyle='#080810';
       octx.fillRect(0,0,GW,GH);
       const cs=CELL*zoom*0.5;
@@ -1246,39 +1228,33 @@ async function exportGIF(){
         octx.fillStyle=t.isHQ?(t.isMe?'#533AB7':'#6B1A1A'):t.col;
         octx.fillRect(sx+0.5,sy+0.5,Math.max(1,cs-1),Math.max(1,cs-1));
       }
-      // Label
-      octx.fillStyle='rgba(0,0,0,0.55)';
-      octx.fillRect(3,3,150,18);
-      octx.fillStyle='rgba(255,255,255,0.8)';
-      octx.font='11px system-ui,sans-serif';
+      octx.fillStyle='rgba(0,0,0,0.6)';
+      octx.fillRect(3,3,148,18);
+      octx.fillStyle='rgba(255,255,255,0.85)';
+      octx.font='11px sans-serif';
       octx.textAlign='left';octx.textBaseline='top';
-      octx.fillText('📅 '+snap.label,6,5);
+      octx.fillText(snap.label,6,5);
 
-      gif.addFrame(offscreen,{copy:true,delay:600});
-    }catch(e){
-      console.warn('Frame failed:',snap.label,e);
-    }
-    await new Promise(r=>setTimeout(r,10)); // keep UI responsive
+      const imageData=octx.getImageData(0,0,GW,GH);
+      const palette=quantize(imageData.data,256);
+      const index=applyPalette(imageData.data,palette);
+      encoder.writeFrame(index,GW,GH,{palette,delay:70,repeat:0}); // delay in 1/100s
+    }catch(e){console.warn('Frame failed:',e);}
   }
 
-  gif.on('finished',blob=>{
-    encodingDone=true;
-    clearTimeout(encodingTimeout);
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download=`vendetta_map_${fileTimestamp()}.gif`;
-    a.click();
-    btn.disabled=false;
-    btn.textContent='🎬 GIF';
-    status(`${players.length} players · ${tiles.length} turfs`);
-  });
+  btn.textContent='⏳ Encoding...';
+  await new Promise(r=>setTimeout(r,10));
 
-  gif.on('progress',p=>{
-    btn.textContent=`⏳ Encoding ${Math.round(p*100)}%...`;
-  });
+  encoder.finish();
+  const blob=new Blob([encoder.bytes()],{type:'image/gif'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`vendetta_map_${fileTimestamp()}.gif`;
+  a.click();
 
-  status('Encoding GIF...');
-  gif.render();
+  btn.disabled=false;
+  btn.textContent='🎬 GIF';
+  status(`${players.length} players · ${tiles.length} turfs`);
 }
 function exportCSV(){
   const rows=[['Rank','Name','Turfs','Percentage','Profile ID','Wallet','Inactive']];
@@ -1483,7 +1459,7 @@ resizeCanvas();
 loadHistory();
 loadLatest();
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gifenc@1.0.1/dist/gifenc.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" onload="initHammer()"></script>
 </body>
 </html>
