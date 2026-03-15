@@ -417,7 +417,8 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
     <div class="wsub" id="wallet-recall-summary">—</div>
     <div class="wallet-section">
       <div class="wallet-label">DVD NFT Object ID</div>
-      <input class="wallet-input" id="wallet-dvd" placeholder="0xafe7c462..." title="Your DVD NFT object ID">
+      <input class="wallet-input" id="wallet-dvd" placeholder="0xafe7c462964002efe12c9601b1d75293d0b22052bc..." title="Your DVD NFT object ID">
+      <div style="font-size:9px;color:#444;margin-top:3px">Find in Slush wallet → Assets → your Vendetta DVD NFT → Object ID</div>
     </div>
     <div class="wallet-section">
       <div class="wallet-label">Player Profile Object ID</div>
@@ -2137,8 +2138,11 @@ async function connectStandardWallet(w){
 async function executeRecall(){
   const dvdId=document.getElementById('wallet-dvd').value.trim();
   const profileId=document.getElementById('wallet-profile').value.trim();
-  if(!dvdId||!profileId){
-    walletStatus('❌ Please fill in DVD and Profile IDs','var(--v-red)'); return;
+  if(!dvdId){
+    walletStatus('❌ Please fill in your DVD NFT Object ID','var(--v-red)'); return;
+  }
+  if(!profileId){
+    walletStatus('❌ Please fill in your Player Profile Object ID','var(--v-red)'); return;
   }
   if(!walletApi){
     walletStatus('❌ Connect wallet first','var(--v-red)'); return;
