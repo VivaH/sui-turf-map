@@ -2073,61 +2073,42 @@ async function connectWallet(){
   walletStatus('Looking for wallet...','#888');
   walletApi=null;
 
-  // Slush uses the Wallet Standard via @wallet-standard/app
-  // It registers wallets via a 'wallet-standard:app-ready' event or
-  // via getWallets() from the wallet-standard package
-  // Try to get wallets via the global registry
-  const getWalletsFn = window.getWallets || window.__getWallets;
-  if(getWalletsFn){
-    const registry = getWalletsFn();
-    const wallets = registry.get ? registry.get() : (registry.wallets || []);
-    if(wallets.length>0){
-      return connectStandardWallet(wallets[0]);
+  // Try getWallets() registry first (wallet-standard)
+  try{
+    const reg=window.getWallets?.();
+    if(reg){
+      const list=typeof reg.get==='function'?reg.get():(reg.wallets||[]);
+      if(list.length>0) return connectStandardWallet(list[0]);
     }
-  }
+  }catch(e){}
 
-  // Also check __suiWallets
-  if(window.__suiWallets?.length>0){
-    return connectStandardWallet(window.__suiWallets[0]);
-  }
-
-  // Listen for wallet announcements (MIPD / wallet-standard)
-  walletStatus('Waiting for wallet announcement...','#888');
-  await new Promise((resolve)=>{
-    const timeout=setTimeout(()=>resolve(), 2000);
-    // Wallet Standard announcement
-    window.addEventListener('wallet-standard:register-wallet', (e)=>{
-      clearTimeout(timeout);
-      walletApi={key:'standard-event', w:e.detail||e};
-      resolve();
+  // Wait passively for wallet to announce itself (up to 1.5s)
+  const wallet = await new Promise(resolve=>{
+    // Already registered?
+    if(window.__suiWallets?.length) return resolve(window.__suiWallets[0]);
+    const timer=setTimeout(()=>resolve(null), 1500);
+    window.addEventListener('wallet-standard:register-wallet', e=>{
+      clearTimeout(timer);
+      // e.detail is the wallet or a register function
+      const w=e.detail?.wallet||e.detail;
+      resolve(w||null);
     },{once:true});
-    // Trigger wallets to announce themselves
-    window.dispatchEvent(new Event('wallet-standard:app-ready'));
   });
 
-  if(walletApi?.w){
-    return connectStandardWallet(walletApi.w);
-  }
+  if(wallet) return connectStandardWallet(wallet);
 
-  // Legacy fallback
-  const legacyKeys=['slush','suiWallet','suiet','sui','martian'];
-  for(const key of legacyKeys){
-    const w=window[key];
-    if(w&&(w.connect||w.signAndExecuteTransactionBlock||w.signAndExecuteTransaction)){
-      walletApi={key,w};
-      try{
-        if(w.connect) await w.connect();
-        walletStatus(`✓ Connected via ${key}`,'var(--v-green)');
-        document.getElementById('wallet-execute-btn').style.display='block';
-        return;
-      }catch(err){
-        walletStatus(`❌ Connect failed: ${err.message}`,'var(--v-red)');
-        return;
+  // Last resort: check all window keys for anything with sui features
+  for(const key of Object.keys(window)){
+    try{
+      const w=window[key];
+      if(w&&typeof w==='object'&&w.features&&
+        (w.features['sui:signAndExecuteTransaction']||w.features['sui:signAndExecuteTransactionBlock'])){
+        return connectStandardWallet(w);
       }
-    }
+    }catch(e){}
   }
 
-  walletStatus('❌ Slush wallet not detected. Try refreshing the page after installing Slush, or open DevTools console and type: window.__suiWallets','var(--v-red)');
+  walletStatus('❌ Slush wallet not detected. Please open the Slush extension once to activate it, then try again.','var(--v-red)');
 }
 
 async function connectStandardWallet(w){
