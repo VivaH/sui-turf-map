@@ -2260,7 +2260,8 @@ async function buildAndSignTx(calls, dvdId, profileId, hqOid){
         chain:'sui:mainnet',
       });
     }catch(err){
-      throw new Error(err?.message??JSON.stringify(err));
+      console.error('Full signing error:', err);
+      throw new Error(err?.message||err?.toString()||JSON.stringify(err)||'Unknown error');
     }
   }
 
