@@ -184,6 +184,7 @@ button:disabled{opacity:0.4;cursor:default}
   <span id="route-indicator">Click a tile or player to select A → B</span>
   <div class="sep"></div>
   <button onclick="exportPNG()">⬇ PNG</button>
+  <button onclick="exportGIF()" id="gifBtn" style="display:none">🎬 GIF</button>
   <button onclick="exportCSV()" id="csvBtn" style="display:none">⬇ CSV</button>
   <div class="sep"></div>
   <span id="age"></span>
@@ -365,6 +366,7 @@ async function loadHistory(){
       slider.value=0;
       document.getElementById('tl-count').textContent=`${snapshots.length} snapshots`;
       document.getElementById('analyse-btn').style.display='';
+      document.getElementById('gifBtn').style.display='';
       updateTimelineLabel(0);
     }
   }catch(e){}
@@ -1160,6 +1162,12 @@ function onRouteBtn(pid,e){e.stopPropagation();if(!routeMode)toggleRouteMode();s
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 // ── EXPORT ────────────────────────────────────────────────────────────────────
+function fileTimestamp(){
+  const n=new Date();
+  const pad=x=>String(x).padStart(2,'0');
+  return `${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}-${pad(n.getHours())}${pad(n.getMinutes())}${pad(n.getSeconds())}`;
+}
+
 function exportPNG(){
   const cv=document.getElementById('map');
   const scale=3;
@@ -1168,13 +1176,97 @@ function exportPNG(){
   offscreen.height=cv.height*scale;
   const ctx=offscreen.getContext('2d');
   ctx.scale(scale,scale);
-  // Redraw at higher resolution
-  const savedZoom=zoom,savedPanX=panX,savedPanY=panY;
-  // Draw onto offscreen using same state
   ctx.drawImage(cv,0,0);
   const a=document.createElement('a');
   a.href=offscreen.toDataURL('image/png');
-  a.download='vendetta_map_'+new Date().toISOString().slice(0,10)+'.png';a.click();
+  a.download=`vendetta_map_${fileTimestamp()}.png`;a.click();
+}
+
+async function exportGIF(){
+  if(snapshots.length<2){alert('Need at least 2 snapshots to create an animation.');return;}
+  if(typeof GIF==='undefined'){alert('GIF library not loaded yet, please try again in a moment.');return;}
+
+  const btn=document.getElementById('gifBtn');
+  btn.disabled=true;
+  btn.textContent='⏳ Building GIF...';
+
+  const cv=document.getElementById('map');
+  const W=cv.width, H=cv.height;
+
+  // Use last 20 snapshots max, oldest first
+  const frames=snapshots.slice(0,Math.min(20,snapshots.length)).reverse();
+
+  const gif=new GIF({
+    workers:2,
+    quality:8,
+    width:W,
+    height:H,
+    workerScript:'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
+  });
+
+  const offscreen=document.createElement('canvas');
+  offscreen.width=W; offscreen.height=H;
+  const octx=offscreen.getContext('2d');
+
+  status('Building GIF frames...');
+
+  for(let i=0;i<frames.length;i++){
+    const snap=frames[i];
+    btn.textContent=`⏳ Frame ${i+1}/${frames.length}...`;
+    try{
+      const d=await fetch(snap.file+'?t='+Date.now()).then(r=>r.json());
+      // Build tile data for this snapshot
+      const snapTiles=[];
+      const snapPlayers=d.players||[];
+      for(const t of (d.tiles||[])){
+        const p=snapPlayers[t.p]; if(!p) continue;
+        const isMe=MY_IDS.has(p.pid);
+        const mark=getMark(p.pid);
+        const col=mark==='friend'?'#1D9E75':mark==='enemy'?'#E24B4A':p.color;
+        snapTiles.push({x:t.x,y:t.y,isHQ:!!t.hq,isMe,col});
+      }
+
+      // Draw frame
+      octx.fillStyle='#080810';
+      octx.fillRect(0,0,W,H);
+      const cs=CELL*zoom;
+      for(const t of snapTiles){
+        const sx=(t.x-minX)*cs+panX, sy=(maxY-t.y)*cs+panY;
+        if(sx<-cs||sx>W||sy<-cs||sy>H) continue;
+        octx.fillStyle=t.isHQ?(t.isMe?'#533AB7':'#6B1A1A'):t.col;
+        octx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
+      }
+      // Label: date top-left
+      octx.fillStyle='rgba(0,0,0,0.55)';
+      octx.fillRect(4,4,180,20);
+      octx.fillStyle='rgba(255,255,255,0.8)';
+      octx.font='12px system-ui,sans-serif';
+      octx.textAlign='left';octx.textBaseline='top';
+      octx.fillText('📅 '+snap.label,8,7);
+
+      gif.addFrame(offscreen,{copy:true,delay:600});
+    }catch(e){
+      console.warn('Frame failed:',snap.label,e);
+    }
+    await new Promise(r=>setTimeout(r,10)); // keep UI responsive
+  }
+
+  gif.on('finished',blob=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`vendetta_map_${fileTimestamp()}.gif`;
+    a.click();
+    btn.disabled=false;
+    btn.textContent='🎬 GIF';
+    status(`${players.length} players · ${tiles.length} turfs`);
+  });
+
+  gif.on('progress',p=>{
+    btn.textContent=`⏳ Encoding ${Math.round(p*100)}%...`;
+  });
+
+  status('Encoding GIF...');
+  gif.render();
 }
 function exportCSV(){
   const rows=[['Rank','Name','Turfs','Percentage','Profile ID','Wallet','Inactive']];
@@ -1379,5 +1471,7 @@ resizeCanvas();
 loadHistory();
 loadLatest();
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" onload="initHammer()"></script>
 </body>
 </html>
