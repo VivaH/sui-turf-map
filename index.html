@@ -1665,20 +1665,20 @@ function toggleAnalysisOverlay(){
 // ── BATTLE HISTORY (24h) ──────────────────────────────────────────────────────
 async function loadBattleHistory(){
   if(snapshots.length<2) return;
-  // Gather all snapshots from the last 24 hours
   const now=Date.now();
   const cutoff=now-24*60*60*1000;
-  // snapshots[0] = newest; find how many are within 24h
+  // Use s.timestamp (ISO string) if available, fall back to label parsing
   const recent=snapshots.filter(s=>{
-    if(!s.label) return false;
-    // Label format: "YYYY-MM-DD HH:MM" or similar; parse it
-    const d=new Date(s.label.replace(' ','T'));
-    return !isNaN(d)&&d.getTime()>=cutoff;
+    const ts=s.timestamp?new Date(s.timestamp):new Date(s.label);
+    return !isNaN(ts)&&ts.getTime()>=cutoff;
   });
-  // Always include at least the 2 most recent
+  // Need at least 2 snapshots to compare; fall back to last 4 if not enough
   const toLoad=recent.length>=2?recent:snapshots.slice(0,Math.min(4,snapshots.length));
-  const oldest=toLoad[toLoad.length-1];
+  // oldest = last in array (snapshots are newest-first), newest = first
   const newest=toLoad[0];
+  const oldest=toLoad[toLoad.length-1];
+  // Guard: don't compare a snapshot with itself
+  if(newest.file===oldest.file) return;
   try{
     const [dOld,dNew]=await Promise.all([
       fetch(oldest.file+'?t='+Date.now()).then(r=>r.json()),
