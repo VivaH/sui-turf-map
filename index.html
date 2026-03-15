@@ -198,6 +198,19 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
   button{padding:6px 10px;font-size:12px}
 }
 
+/* ── TOP MOVERS BANNER ── */
+#top-movers-bar{display:none;align-items:center;gap:10px;padding:5px 14px;background:#0a0a00;border-bottom:2px solid #3a2a00;flex-shrink:0;font-family:var(--font-mono);font-size:10px;flex-wrap:wrap}
+#top-movers-bar.visible{display:flex}
+#top-movers-bar .tm-label{color:var(--v-gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+#top-movers-bar .tm-gainer{color:var(--v-green);white-space:nowrap}
+#top-movers-bar .tm-loser{color:var(--v-red);white-space:nowrap}
+#top-movers-bar .tm-sep{color:#444;margin:0 4px}
+#top-movers-close{background:transparent;border:none;color:#555;cursor:pointer;font-size:14px;padding:0;line-height:1;margin-left:auto;box-shadow:none;flex-shrink:0}
+#top-movers-close:hover{color:#ccc;background:transparent}
+
+/* ── GARRISON IN TIP ── */
+#tip .tgar,#touch-tooltip .tgar{color:#89c6ff;font-size:10px}
+
 /* ── ANALYSIS TABS ── */
 .an-tab{background:#0a0a0a;color:#555;cursor:pointer;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.3px;border-radius:0;border:2px solid #222}
 .an-tab.on{background:#111;color:#ccc;font-weight:700;border-color:#444;box-shadow:2px 2px 0 #000}
@@ -215,7 +228,7 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 <body>
 
 <div id="toolbar">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v2.5</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v2.6</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -225,9 +238,19 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
   <button onclick="exportPNG()">⬇ PNG</button>
   <button onclick="exportGIF()" id="gifBtn" style="display:none">🎬 GIF</button>
   <button onclick="exportCSV()" id="csvBtn" style="display:none">⬇ CSV</button>
+  <button id="battle-btn" onclick="toggleBattleHistory()" style="display:none">⚔ 24h Changes</button>
   <div class="sep"></div>
   <span id="age"></span>
   <span id="status">Loading...</span>
+</div>
+
+<!-- Top movers banner -->
+<div id="top-movers-bar">
+  <span class="tm-label">📈 24h top movers</span>
+  <span id="tm-gainers"></span>
+  <span class="tm-sep">|</span>
+  <span id="tm-losers"></span>
+  <button id="top-movers-close" onclick="document.getElementById('top-movers-bar').classList.remove('visible')" title="Dismiss">✕</button>
 </div>
 
 <!-- Timeline bar -->
@@ -237,21 +260,21 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
   <input type="range" id="tl-slider" min="0" value="0" step="1" oninput="onSliderInput(this.value)">
   <span id="tl-info">—</span>
   <span id="tl-count">— snapshots</span>
-  <button id="analyse-btn" onclick="openAnalysis()" style="font-size:11px;padding:3px 10px;border-color:#378ADD;color:#378ADD;display:none">📊 Analyse</button>
+  <button id="analyse-btn" onclick="openAnalysis()" style="font-size:10px;padding:2px 8px;border-color:var(--v-blue);color:var(--v-blue);background:#050d18;box-shadow:2px 2px 0 #0a2040;display:none">📊 Analyse</button>
 </div>
 
 <div id="main">
   <div id="map-wrap">
     <canvas id="map"></canvas>
     <canvas id="minimap-canvas" width="180" height="180" title="Click to navigate"></canvas>
-    <div id="tip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div></div>
+    <div id="tip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div><div class="tgar"></div></div>
     <div id="zoom-btns">
       <button onclick="zoomBy(1.3)">+</button>
       <button onclick="zoomBy(0.77)">−</button>
       <button onclick="resetView()" style="font-size:11px">⊡</button>
     </div>
     <button id="sidebar-toggle" onclick="toggleSidebar()" title="Player list">☰</button>
-    <div id="touch-tooltip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div></div>
+    <div id="touch-tooltip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div><div class="tgar"></div></div>
     <div id="route-panel">
       <h3>🗺 Shortest route</h3>
       <div class="route-player">
@@ -305,46 +328,46 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 </div>
 
 <!-- Analysis modal -->
-<div id="analysis-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:300;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
-  <div style="background:#0f0f1e;border:1px solid #2a2a4e;border-radius:12px;width:100%;max-width:600px;overflow:hidden;margin:auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1e1e2e;background:#0a0a14">
+<div id="analysis-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:#111;border:2px solid #555;border-radius:0;width:100%;max-width:600px;overflow:hidden;margin:auto;box-shadow:6px 6px 0 #000">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:2px solid #222;background:#0a0a0a">
       <div>
-        <div style="font-size:14px;font-weight:500;color:#fff">📊 Snapshot analysis</div>
-        <div id="analysis-subtitle" style="font-size:11px;color:#555;margin-top:2px">—</div>
+        <div style="font-family:var(--font-bangers);font-size:16px;letter-spacing:1.5px;color:#fff;text-transform:uppercase">📊 Snapshot Analysis</div>
+        <div id="analysis-subtitle" style="font-size:10px;color:#555;margin-top:2px;font-family:var(--font-mono)">—</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <button id="analysis-map-btn" onclick="toggleAnalysisOverlay()" style="font-size:11px;padding:4px 10px">🗺 Show on map</button>
-        <button onclick="closeAnalysis()" style="background:transparent;border:none;color:#555;font-size:18px;cursor:pointer;padding:0;line-height:1">✕</button>
+        <button id="analysis-map-btn" onclick="toggleAnalysisOverlay()" style="font-size:10px;padding:3px 10px">🗺 Show on map</button>
+        <button onclick="closeAnalysis()" style="background:transparent;border:none;color:#555;font-size:18px;cursor:pointer;padding:0;line-height:1;box-shadow:none">✕</button>
       </div>
     </div>
     <!-- Summary stats -->
-    <div style="display:flex;gap:0;border-bottom:1px solid #1e1e2e">
-      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e1e2e">
-        <div style="font-size:20px;font-weight:500;color:#1D9E75" id="an-gained-total">—</div>
-        <div style="font-size:11px;color:#555">turfs captured</div>
+    <div style="display:flex;gap:0;border-bottom:2px solid #222">
+      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #222">
+        <div style="font-family:var(--font-bangers);font-size:22px;letter-spacing:1px;color:var(--v-green)" id="an-gained-total">—</div>
+        <div style="font-size:10px;color:#555;font-family:var(--font-mono);text-transform:uppercase">turfs captured</div>
       </div>
-      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e1e2e">
-        <div style="font-size:20px;font-weight:500;color:#E24B4A" id="an-lost-total">—</div>
-        <div style="font-size:11px;color:#555">turfs lost</div>
+      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #222">
+        <div style="font-family:var(--font-bangers);font-size:22px;letter-spacing:1px;color:var(--v-red)" id="an-lost-total">—</div>
+        <div style="font-size:10px;color:#555;font-family:var(--font-mono);text-transform:uppercase">turfs lost</div>
       </div>
-      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #1e1e2e">
-        <div style="font-size:20px;font-weight:500;color:#FAC775" id="an-active">—</div>
-        <div style="font-size:11px;color:#555">active players</div>
+      <div style="flex:1;padding:10px;text-align:center;border-right:1px solid #222">
+        <div style="font-family:var(--font-bangers);font-size:22px;letter-spacing:1px;color:var(--v-gold)" id="an-active">—</div>
+        <div style="font-size:10px;color:#555;font-family:var(--font-mono);text-transform:uppercase">active players</div>
       </div>
       <div style="flex:1;padding:10px;text-align:center">
-        <div style="font-size:20px;font-weight:500;color:#888" id="an-unchanged">—</div>
-        <div style="font-size:11px;color:#555">turfs changed</div>
+        <div style="font-family:var(--font-bangers);font-size:22px;letter-spacing:1px;color:#888" id="an-unchanged">—</div>
+        <div style="font-size:10px;color:#555;font-family:var(--font-mono);text-transform:uppercase">turfs changed</div>
       </div>
     </div>
     <!-- Filter tabs -->
-    <div style="display:flex;gap:0;border-bottom:1px solid #1e1e2e;background:#0a0a12">
-      <button class="an-tab on" onclick="setAnTab('all',this)" style="flex:1;border-radius:0;border:none;border-right:1px solid #1e1e2e;padding:7px;font-size:11px">All movers</button>
-      <button class="an-tab" onclick="setAnTab('gainers',this)" style="flex:1;border-radius:0;border:none;border-right:1px solid #1e1e2e;padding:7px;font-size:11px;color:#1D9E75">▲ Gainers</button>
-      <button class="an-tab" onclick="setAnTab('losers',this)" style="flex:1;border-radius:0;border:none;padding:7px;font-size:11px;color:#E24B4A">▼ Losers</button>
+    <div style="display:flex;gap:0;border-bottom:2px solid #222;background:#0a0a0a">
+      <button class="an-tab on" onclick="setAnTab('all',this)" style="flex:1;border-radius:0;border:none;border-right:1px solid #222;padding:7px;font-size:10px">All movers</button>
+      <button class="an-tab" onclick="setAnTab('gainers',this)" style="flex:1;border-radius:0;border:none;border-right:1px solid #222;padding:7px;font-size:10px;color:var(--v-green)">▲ Gainers</button>
+      <button class="an-tab" onclick="setAnTab('losers',this)" style="flex:1;border-radius:0;border:none;padding:7px;font-size:10px;color:var(--v-red)">▼ Losers</button>
     </div>
     <!-- Player list -->
     <div id="analysis-list" style="max-height:50vh;overflow-y:auto;padding:8px 0"></div>
-    <div style="padding:10px 18px;border-top:1px solid #1e1e2e;font-size:11px;color:#444">
+    <div style="padding:8px 18px;border-top:2px solid #222;font-size:10px;color:#444;font-family:var(--font-mono)">
       Comparing: <span id="an-from-label" style="color:#666">—</span> → <span id="an-to-label" style="color:#666">—</span>
     </div>
   </div>
@@ -382,11 +405,16 @@ let panX=0,panY=0,zoom=1;
 let dragging=false,dragStartX=0,dragStartY=0,dragPanX=0,dragPanY=0;
 let routeMode=false,routePidA=null,routePidB=null,routePath=null;
 let routePathMap=null;
+let selectedPid=null;
 
 // Timeline state
 let snapshots=[];
 let currentSnapIdx=0;
 let isLive=true;
+
+// Battle history (24h overlay)
+let battleHistoryData=null;
+let battleHistoryActive=false;
 
 function status(s){document.getElementById('status').textContent=s;}
 
@@ -406,7 +434,10 @@ async function loadHistory(){
       document.getElementById('tl-count').textContent=`${snapshots.length} snapshots`;
       document.getElementById('analyse-btn').style.display='';
       document.getElementById('gifBtn').style.display='';
+      document.getElementById('battle-btn').style.display='';
       updateTimelineLabel(0);
+      // Compute top movers + battle history in background
+      setTimeout(()=>{ loadBattleHistory(); }, 200);
     }
   }catch(e){}
 }
@@ -475,7 +506,8 @@ async function loadData(url){
     for(const t of (d.tiles||[])){
       const p=players[t.p]; if(!p) continue;
       const isMe=MY_IDS.has(p.pid);
-      tiles.push({x:t.x,y:t.y,pid:p.pid,isHQ:!!t.hq,isMe,color:p.color,pidIdx:t.p});
+      tiles.push({x:t.x,y:t.y,pid:p.pid,isHQ:!!t.hq,isMe,color:p.color,pidIdx:t.p,
+        gH:t.g_h||0,gB:t.g_b||0,gE:t.g_e||0});
       tileMap.set(`${t.x},${t.y}`,tiles.length-1);
     }
     if(tiles.length){
@@ -793,6 +825,27 @@ function drawMap(){
       lx+=ctx.measureText(lbl).width+34;
     }
   }
+
+  // Battle history overlay (24h)
+  if(battleHistoryActive&&battleHistoryData){
+    for(const ch of battleHistoryData.changedTiles){
+      if(ch.x<wx0||ch.x>wx1||ch.y<wy0||ch.y>wy1) continue;
+      const sx=(ch.x-minX)*cs+panX,sy=(maxY-ch.y)*cs+panY;
+      const col=(ch.toPid&&MY_IDS.has(ch.toPid))?'rgba(111,255,169,0.85)':
+                (ch.fromPid&&MY_IDS.has(ch.fromPid))?'rgba(255,132,131,0.85)':
+                ch.toPid?'rgba(111,255,169,0.5)':'rgba(255,132,131,0.5)';
+      ctx.fillStyle=col;ctx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
+    }
+    ctx.font='11px sans-serif';ctx.textBaseline='bottom';
+    const leg2=[['#6fffa9','Captured (24h)'],['#ff8483','Lost (24h)']];
+    let lx2=8,ly2=H-(analysisOverlay?28:8);
+    for(const [col,lbl] of leg2){
+      ctx.fillStyle=col;ctx.fillRect(lx2,ly2-12,12,12);
+      ctx.fillStyle='rgba(255,255,255,0.75)';ctx.textAlign='left';
+      ctx.fillText(lbl,lx2+16,ly2);
+      lx2+=ctx.measureText(lbl).width+34;
+    }
+  }
 }
 
 function drawMinimap(){
@@ -851,6 +904,8 @@ mapWrap.addEventListener('mousemove',e=>{
       tip.querySelector('.tname').textContent=p.name||'[unknown]';
       tip.querySelector('.tpos').textContent=`Position: (${wx}, ${wy})`;
       tip.querySelector('.thq').textContent=t.isHQ?'⌂ Headquarters':'';
+      const gar=(t.gH||t.gB||t.gE)?`👥 ${t.gH}H · ${t.gB}B · ${t.gE}E`:'';
+      tip.querySelector('.tgar').textContent=gar;
       tip.style.display='block';
       const r2=mapWrap.getBoundingClientRect();
       tip.style.left=(e.clientX-r2.left+14)+'px';tip.style.top=(e.clientY-r2.top-8)+'px';
@@ -1023,6 +1078,7 @@ function _handleTouchEnd(e){
           tt.querySelector('.tname').textContent = p.name || '[unknown]';
           tt.querySelector('.tpos').textContent  = `Position: (${wx}, ${wy})`;
           tt.querySelector('.thq').textContent   = tile.isHQ ? '⌂ Headquarters' : '';
+          tt.querySelector('.tgar').textContent  = (tile.gH||tile.gB||tile.gE)?`👥 ${tile.gH}H · ${tile.gB}B · ${tile.gE}E`:'';
           tt.style.display = 'block';
           clearTimeout(_tooltipTimer);
           _tooltipTimer = setTimeout(() => { tt.style.display = 'none'; }, 3000);
@@ -1088,7 +1144,9 @@ function jumpToPlayer(pid){
   const cv=document.getElementById('map');
   zoom=Math.max(0.2,Math.min(20,Math.min(cv.width/((bx1-bx0+7)*CELL),cv.height/((by1-by0+7)*CELL))));
   panX=cv.width/2-((bx0+bx1)/2-minX)*CELL*zoom;panY=cv.height/2-(maxY-(by0+by1)/2)*CELL*zoom;
-  highlightPid=pid;drawMap();drawMinimap();
+  highlightPid=pid;
+  selectedPid=pid;
+  drawMap();drawMinimap();
   setTimeout(()=>{highlightPid=null;drawMap();},2000);
 }
 function jumpToMe(){jumpToPlayer([...MY_IDS][0]);}
@@ -1604,11 +1662,89 @@ function toggleAnalysisOverlay(){
   drawMap();
 }
 
+// ── BATTLE HISTORY (24h) ──────────────────────────────────────────────────────
+async function loadBattleHistory(){
+  if(snapshots.length<2) return;
+  // Gather all snapshots from the last 24 hours
+  const now=Date.now();
+  const cutoff=now-24*60*60*1000;
+  // snapshots[0] = newest; find how many are within 24h
+  const recent=snapshots.filter(s=>{
+    if(!s.label) return false;
+    // Label format: "YYYY-MM-DD HH:MM" or similar; parse it
+    const d=new Date(s.label.replace(' ','T'));
+    return !isNaN(d)&&d.getTime()>=cutoff;
+  });
+  // Always include at least the 2 most recent
+  const toLoad=recent.length>=2?recent:snapshots.slice(0,Math.min(4,snapshots.length));
+  const oldest=toLoad[toLoad.length-1];
+  const newest=toLoad[0];
+  try{
+    const [dOld,dNew]=await Promise.all([
+      fetch(oldest.file+'?t='+Date.now()).then(r=>r.json()),
+      fetch(newest.file+'?t='+Date.now()).then(r=>r.json()),
+    ]);
+    function tileOwnerMap(d){
+      const m=new Map();
+      for(const t of (d.tiles||[])){const p=d.players[t.p];if(p) m.set(`${t.x},${t.y}`,{pid:p.pid,name:p.name,color:p.color});}
+      return m;
+    }
+    const mapOld=tileOwnerMap(dOld),mapNew=tileOwnerMap(dNew);
+    const changedTiles=[];
+    const playerChanges=new Map();
+    const pidInfo=new Map();
+    for(const p of [...(dOld.players||[]),...(dNew.players||[])]){
+      if(!pidInfo.has(p.pid)) pidInfo.set(p.pid,{name:p.name||'',color:p.color});
+    }
+    const allKeys=new Set([...mapOld.keys(),...mapNew.keys()]);
+    for(const key of allKeys){
+      const a=mapOld.get(key),b=mapNew.get(key);
+      const fromPid=a?.pid||null,toPid=b?.pid||null;
+      if(fromPid===toPid) continue;
+      const [x,y]=key.split(',').map(Number);
+      let type=!fromPid?'new':!toPid?'abandoned':'captured';
+      changedTiles.push({x,y,fromPid,toPid,type});
+      if(toPid){
+        if(!playerChanges.has(toPid)){const i=pidInfo.get(toPid)||{};playerChanges.set(toPid,{gained:0,lost:0,name:i.name||'',color:i.color||'#888'});}
+        playerChanges.get(toPid).gained++;
+      }
+      if(fromPid){
+        if(!playerChanges.has(fromPid)){const i=pidInfo.get(fromPid)||{};playerChanges.set(fromPid,{gained:0,lost:0,name:i.name||'',color:i.color||'#888'});}
+        playerChanges.get(fromPid).lost++;
+      }
+    }
+    battleHistoryData={changedTiles,playerChanges,pidInfo,fromLabel:oldest.label,toLabel:newest.label};
+    renderTopMovers();
+  }catch(e){console.warn('Battle history error:',e);}
+}
+
+function toggleBattleHistory(){
+  battleHistoryActive=!battleHistoryActive;
+  const btn=document.getElementById('battle-btn');
+  btn.classList.toggle('active',battleHistoryActive);
+  drawMap();
+}
+
+// ── TOP MOVERS BANNER ─────────────────────────────────────────────────────────
+function renderTopMovers(){
+  if(!battleHistoryData) return;
+  const {playerChanges}=battleHistoryData;
+  const rows=[...playerChanges.entries()].map(([pid,c])=>({pid,...c,net:c.gained-c.lost}));
+  const gainers=rows.filter(r=>r.net>0).sort((a,b)=>b.net-a.net).slice(0,3);
+  const losers=rows.filter(r=>r.net<0).sort((a,b)=>a.net-b.net).slice(0,3);
+  if(!gainers.length&&!losers.length) return;
+  const gEl=document.getElementById('tm-gainers');
+  const lEl=document.getElementById('tm-losers');
+  gEl.innerHTML=gainers.map(r=>`<span class="tm-gainer">▲ ${esc(r.name||'?')} +${r.net}</span>`).join('<span class="tm-sep"> · </span>');
+  lEl.innerHTML=losers.map(r=>`<span class="tm-loser">▼ ${esc(r.name||'?')} ${r.net}</span>`).join('<span class="tm-sep"> · </span>');
+  document.getElementById('top-movers-bar').classList.add('visible');
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 resizeCanvas();
 loadHistory();
 loadLatest();
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js" onload="initHammer()"></script>
+
 </body>
 </html>
