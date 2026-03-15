@@ -214,7 +214,8 @@ for i in range(0, len(tile_ids), BATCH):
                 elif k == "bouncer":  g_b = v
                 elif k == "enforcer": g_e = v
         raw_tiles.append({"x": x, "y": y, "pid": pid, "hq": tile_id in hq_set,
-                          "g_h": g_h, "g_b": g_b, "g_e": g_e})
+                          "g_h": g_h, "g_b": g_b, "g_e": g_e,
+                          "oid": tile_id if (g_h or g_b or g_e or tile_id in hq_set) else None})
         owner_count[pid] = owner_count.get(pid, 0) + 1
     if i % 2000 == 0 and i > 0: print(f"  {i}/{len(tile_ids)} tiles → {len(owner_count)} players")
     time.sleep(DELAY)
@@ -260,6 +261,7 @@ for t in raw_tiles:
     if t.get("g_h"): entry["g_h"] = t["g_h"]
     if t.get("g_b"): entry["g_b"] = t["g_b"]
     if t.get("g_e"): entry["g_e"] = t["g_e"]
+    if t.get("oid"): entry["oid"] = t["oid"]  # object ID for garrison recall
     compact_tiles.append(entry)
 
 now_utc = datetime.now(timezone.utc)

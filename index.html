@@ -224,7 +224,7 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 #garrison-list{max-height:60vh;overflow-y:auto}
 #garrison-list::-webkit-scrollbar{width:3px}
 #garrison-list::-webkit-scrollbar-thumb{background:#333}
-.gar-row{display:grid;grid-template-columns:120px 60px 60px 80px auto;align-items:center;gap:0;padding:5px 18px;border-bottom:1px solid #111;font-size:11px;font-family:var(--font-mono);cursor:pointer}
+.gar-row{display:grid;grid-template-columns:20px 120px 60px 60px 80px auto;align-items:center;gap:0;padding:5px 18px;border-bottom:1px solid #111;font-size:11px;font-family:var(--font-mono);cursor:pointer}
 .gar-row:hover{background:#161616}
 .gar-pos{color:#666}
 .gar-e{color:#ff8483;font-weight:700;text-align:right;padding-right:8px}
@@ -234,6 +234,33 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 .gar-hq-badge{font-size:9px;color:var(--v-gold);border:1px solid var(--v-gold);padding:1px 4px;margin-left:4px}
 .p-gar-btn{width:18px;height:18px;padding:0;font-size:10px;border-radius:0;flex-shrink:0;line-height:18px;text-align:center;background:#111;border:1px solid #333;box-shadow:1px 1px 0 #000;color:#89c6ff;display:none}
 .has-garrison .p-gar-btn{display:block}
+
+/* ── GARRISON RECALL ── */
+#garrison-recall-bar{display:none;align-items:center;gap:8px;padding:8px 18px;border-top:2px solid #222;background:#0a0a0a;flex-shrink:0}
+#garrison-recall-bar.visible{display:flex}
+#garrison-recall-info{font-size:10px;color:#555;font-family:var(--font-mono);flex:1}
+#garrison-recall-btn{background:#111;border:2px solid var(--v-gold);color:var(--v-gold);box-shadow:2px 2px 0 #3a2a00;font-size:10px;padding:3px 10px}
+#garrison-recall-btn:hover{background:#1a1200}
+.gar-row.selected{background:#0a0f05;border-left:3px solid var(--v-green)}
+.gar-check{width:14px;height:14px;cursor:pointer;flex-shrink:0;accent-color:var(--v-green)}
+#garrison-select-all{font-size:9px;padding:2px 6px;background:transparent;border:1px solid #333;color:#555;box-shadow:none}
+#garrison-select-all:hover{border-color:#888;color:#ccc}
+
+/* ── WALLET MODAL ── */
+#wallet-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:400;align-items:center;justify-content:center}
+#wallet-modal.open{display:flex}
+#wallet-box{background:#111;border:2px solid #555;border-radius:0;padding:24px;width:460px;max-width:90vw;box-shadow:6px 6px 0 #000;font-family:var(--font-mono)}
+#wallet-box h2{font-family:var(--font-bangers);font-size:18px;letter-spacing:1.5px;color:#fff;text-transform:uppercase;margin-bottom:4px}
+#wallet-box .wsub{font-size:10px;color:#555;margin-bottom:16px}
+.wallet-section{margin-bottom:14px}
+.wallet-label{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.wallet-input{width:100%;background:#0a0a0a;color:#ccc;border:2px solid #333;border-radius:0;padding:6px 8px;font-size:10px;font-family:var(--font-mono)}
+.wallet-input:focus{outline:none;border-color:var(--v-gold)}
+#wallet-status{font-size:10px;min-height:16px;margin-bottom:10px}
+#wallet-connect-btn{background:var(--v-blue);border-color:var(--v-blue);box-shadow:2px 2px 0 #1a4a9a;color:#fff;font-size:11px;padding:5px 14px;margin-bottom:10px;width:100%}
+#wallet-execute-btn{background:var(--v-green);border-color:#1a5a2a;box-shadow:2px 2px 0 #0a2a0a;color:#000;font-size:11px;padding:5px 14px;width:100%;display:none;font-weight:700}
+#wallet-progress{font-size:10px;color:#555;margin-top:8px;min-height:16px}
+#wallet-close{background:transparent;border:none;color:#555;font-size:18px;cursor:pointer;padding:0;line-height:1;box-shadow:none;float:right;margin-top:-30px}
 
 /* ── ANALYSIS TABS ── */
 .an-tab{background:#0a0a0a;color:#555;cursor:pointer;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.3px;border-radius:0;border:2px solid #222}
@@ -361,9 +388,13 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
         <div id="garrison-title">🛡 Garrison</div>
         <div id="garrison-subtitle">—</div>
       </div>
-      <button id="garrison-close" onclick="closeGarrison()">✕</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button id="garrison-select-all" onclick="garrisonSelectAll()">Select all</button>
+        <button id="garrison-close" onclick="closeGarrison()">✕</button>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:120px 60px 60px 80px auto;padding:6px 18px;border-bottom:2px solid #222;font-size:9px;font-family:var(--font-mono);color:#444;text-transform:uppercase;letter-spacing:.5px">
+    <div style="display:grid;grid-template-columns:20px 120px 60px 60px 80px auto;padding:6px 18px;border-bottom:2px solid #222;font-size:9px;font-family:var(--font-mono);color:#444;text-transform:uppercase;letter-spacing:.5px">
+      <span></span>
       <span>Position</span>
       <span style="color:#ff8483;text-align:right;padding-right:8px">Enforcer</span>
       <span style="color:#89c6ff;text-align:right;padding-right:8px">Bouncer</span>
@@ -371,6 +402,35 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
       <span style="text-align:right">Total</span>
     </div>
     <div id="garrison-list"></div>
+    <div id="garrison-recall-bar">
+      <span id="garrison-recall-info">0 turfs selected</span>
+      <button id="garrison-recall-btn" onclick="openWalletModal()">⬆ Recall to HQ</button>
+    </div>
+  </div>
+</div>
+
+<!-- Wallet / Recall modal -->
+<div id="wallet-modal">
+  <div id="wallet-box">
+    <button id="wallet-close" onclick="closeWalletModal()">✕</button>
+    <h2>⬆ Recall garrison to HQ</h2>
+    <div class="wsub" id="wallet-recall-summary">—</div>
+    <div class="wallet-section">
+      <div class="wallet-label">DVD NFT Object ID</div>
+      <input class="wallet-input" id="wallet-dvd" placeholder="0xafe7c462..." title="Your DVD NFT object ID">
+    </div>
+    <div class="wallet-section">
+      <div class="wallet-label">Player Profile Object ID</div>
+      <input class="wallet-input" id="wallet-profile" placeholder="0x857e8e7f..." title="Your player profile object ID">
+    </div>
+    <div id="wallet-status"></div>
+    <button id="wallet-connect-btn" onclick="connectWallet()">🔗 Connect Slush / Suiet wallet</button>
+    <button id="wallet-execute-btn" onclick="executeRecall()">▶ Execute recall</button>
+    <div id="wallet-progress"></div>
+    <div style="font-size:9px;color:#444;margin-top:12px;line-height:1.6">
+      ⚠ Only works with Slush or Suiet browser extension wallets.<br>
+      ZkLogin (Google) wallets are not supported.
+    </div>
   </div>
 </div>
 
@@ -554,7 +614,7 @@ async function loadData(url){
       const p=players[t.p]; if(!p) continue;
       const isMe=MY_IDS.has(p.pid);
       tiles.push({x:t.x,y:t.y,pid:p.pid,isHQ:!!t.hq,isMe,color:p.color,pidIdx:t.p,
-        gH:t.g_h||0,gB:t.g_b||0,gE:t.g_e||0});
+        gH:t.g_h||0,gB:t.g_b||0,gE:t.g_e||0,oid:t.oid||null});
       tileMap.set(`${t.x},${t.y}`,tiles.length-1);
     }
     if(tiles.length){
@@ -1867,44 +1927,86 @@ function renderTopMovers(){
 }
 
 // ── GARRISON MODAL ────────────────────────────────────────────────────────────
+let garrisonPid = null;
+let garrisonRows = []; // [{tile, selected}]
+
 function openGarrison(pid, e){
   if(e) e.stopPropagation();
+  garrisonPid = pid;
+  garrisonRows = [];
   const p=players.find(pl=>pl.pid===pid)||{};
   document.getElementById('garrison-title').textContent=`🛡 ${p.name||'[unknown]'}`;
 
-  // Get all tiles with garrison, exclude HQ, sort E desc → B desc → H desc
   const garTiles=tiles
     .filter(t=>t.pid===pid&&(t.gH||t.gB||t.gE)&&!t.isHQ)
     .sort((a,b)=>b.gE-a.gE||b.gB-a.gB||b.gH-a.gH);
-
-  // Also include HQ at the top if it has garrison
   const hqTile=tiles.find(t=>t.pid===pid&&t.isHQ&&(t.gH||t.gB||t.gE));
-
   const allRows=[...(hqTile?[hqTile]:[]),...garTiles];
-  const total=allRows.reduce((s,t)=>s+t.gE+t.gB+t.gH,0);
 
+  garrisonRows = allRows.map(t=>({tile:t, selected:false}));
+
+  const total=allRows.reduce((s,t)=>s+t.gE+t.gB+t.gH,0);
   document.getElementById('garrison-subtitle').textContent=
     `${allRows.length} garrisoned turfs · ${total} total units`;
 
-  document.getElementById('garrison-list').innerHTML=allRows.length
-    ? allRows.map(t=>{
-        const hqBadge=t.isHQ?'<span class="gar-hq-badge">HQ</span>':'';
-        const tot=t.gE+t.gB+t.gH;
-        return `<div class="gar-row" onclick="closeGarrison();jumpToTile(${t.x},${t.y})">
-          <span class="gar-pos">(${t.x}, ${t.y})${hqBadge}</span>
-          <span class="gar-e">${t.gE}E</span>
-          <span class="gar-b">${t.gB}B</span>
-          <span class="gar-h">${t.gH}H</span>
-          <span class="gar-total">${tot}</span>
-        </div>`;
-      }).join('')
-    : '<div style="padding:1rem;color:#444;font-size:11px;font-family:var(--font-mono)">No garrison data found.</div>';
-
+  renderGarrisonList();
+  document.getElementById('garrison-recall-bar').classList.remove('visible');
   document.getElementById('garrison-modal').classList.add('open');
+}
+
+function renderGarrisonList(){
+  const el=document.getElementById('garrison-list');
+  if(!garrisonRows.length){
+    el.innerHTML='<div style="padding:1rem;color:#444;font-size:11px;font-family:var(--font-mono)">No garrison data found.</div>';
+    return;
+  }
+  el.innerHTML=garrisonRows.map((row,i)=>{
+    const t=row.tile;
+    const hqBadge=t.isHQ?'<span class="gar-hq-badge">HQ</span>':'';
+    const tot=t.gE+t.gB+t.gH;
+    const noOid=!t.oid&&!t.isHQ;
+    const selCls=row.selected?' selected':'';
+    return `<div class="gar-row${selCls}" onclick="toggleGarrisonRow(${i})">
+      <input class="gar-check" type="checkbox" ${row.selected?'checked':''} ${noOid?'disabled':''} onclick="event.stopPropagation();toggleGarrisonRow(${i})">
+      <span class="gar-pos">(${t.x}, ${t.y})${hqBadge}</span>
+      <span class="gar-e">${t.gE}E</span>
+      <span class="gar-b">${t.gB}B</span>
+      <span class="gar-h">${t.gH}H</span>
+      <span class="gar-total">${tot}</span>
+    </div>`;
+  }).join('');
+  updateRecallBar();
+}
+
+function toggleGarrisonRow(i){
+  const row=garrisonRows[i];
+  if(!row.tile.oid&&!row.tile.isHQ) return; // no object ID available
+  row.selected=!row.selected;
+  renderGarrisonList();
+}
+
+function garrisonSelectAll(){
+  const anyUnselected=garrisonRows.some(r=>!r.selected&&r.tile.oid);
+  garrisonRows.forEach(r=>{ if(r.tile.oid||r.tile.isHQ) r.selected=anyUnselected; });
+  renderGarrisonList();
+}
+
+function updateRecallBar(){
+  const sel=garrisonRows.filter(r=>r.selected&&!r.tile.isHQ);
+  const bar=document.getElementById('garrison-recall-bar');
+  const info=document.getElementById('garrison-recall-info');
+  if(sel.length>0){
+    const units=sel.reduce((s,r)=>s+r.tile.gE+r.tile.gB+r.tile.gH,0);
+    info.textContent=`${sel.length} turf${sel.length>1?'s':''} selected · ${units} units · ${units} tx calls`;
+    bar.classList.add('visible');
+  } else {
+    bar.classList.remove('visible');
+  }
 }
 
 function closeGarrison(){
   document.getElementById('garrison-modal').classList.remove('open');
+  garrisonPid=null; garrisonRows=[];
 }
 
 function jumpToTile(wx,wy){
@@ -1916,6 +2018,244 @@ function jumpToTile(wx,wy){
 
 document.getElementById('garrison-modal').addEventListener('click',e=>{
   if(e.target===document.getElementById('garrison-modal')) closeGarrison();
+});
+
+// ── WALLET / RECALL MODAL ─────────────────────────────────────────────────────
+// Known fixed shared objects from move_gangster_free transaction
+const GAME_PKG     = '0x54a96d233f754afe62ad0e8b600b977d3f819be8b8c125391d135c3a4419332e';
+const GAME_CONFIG  = '0xa32707eecb49cded77c0e9b8041a7a24fe930bd76407802115d290bba70a3a4e';
+const TURF_REG     = '0x6e6910507846c5480fa5e7a271f7049dbe986178766982962329c176884b5777';
+const ITEM_REG     = '0xe1cc20e7cb37aa5fa76a77322750e30a86c946e40cc9b139a393b5ea357a8586';
+const GANG_CONFIG  = '0xc9c4e112571d9ef34fd229972a9080747a76771bb7be4170920f8664e588cd90';
+const SCORE_REG    = '0x972b37a34632c49bbc734cc29b621270a33b74c378def52a32354ff1db43e693';
+const CLOCK        = '0x0000000000000000000000000000000000000000000000000000000000000006';
+const MAX_CALLS_PER_TX = 900;
+
+let walletApi = null; // connected wallet
+
+function openWalletModal(){
+  const sel=garrisonRows.filter(r=>r.selected&&!r.tile.isHQ);
+  if(!sel.length) return;
+
+  // Find HQ tile object ID for this player
+  const hqTile=tiles.find(t=>t.pid===garrisonPid&&t.isHQ&&t.oid);
+  const units=sel.reduce((s,r)=>s+r.tile.gE+r.tile.gB+r.tile.gH,0);
+  const txCount=Math.ceil(units/MAX_CALLS_PER_TX);
+
+  document.getElementById('wallet-recall-summary').textContent=
+    `${sel.length} turfs · ${units} units · ${txCount} transaction${txCount>1?'s':''}${!hqTile?' · ⚠ HQ object ID not found in data':''}`;
+
+  // Pre-fill profile ID if known
+  const p=players.find(pl=>pl.pid===garrisonPid);
+  if(p) document.getElementById('wallet-profile').value=p.pid;
+
+  // Try to restore saved DVD from localStorage
+  const saved=localStorage.getItem('vendetta_dvd_id');
+  if(saved) document.getElementById('wallet-dvd').value=saved;
+
+  walletStatus('','');
+  document.getElementById('wallet-execute-btn').style.display='none';
+  document.getElementById('wallet-progress').textContent='';
+  document.getElementById('wallet-modal').classList.add('open');
+}
+
+function closeWalletModal(){
+  document.getElementById('wallet-modal').classList.remove('open');
+}
+
+function walletStatus(msg, color){
+  const el=document.getElementById('wallet-status');
+  el.textContent=msg;
+  el.style.color=color||'#888';
+}
+
+async function connectWallet(){
+  walletStatus('Looking for wallet...','#888');
+  // Try Slush first, then Suiet, then generic window.suiWallet
+  const providers=['slush','suiWallet','suiet','okxwallet','martian'];
+  walletApi=null;
+  for(const key of providers){
+    const w=window[key];
+    if(w&&(w.connect||w.signAndExecuteTransactionBlock||w.signAndExecuteTransaction)){
+      walletApi={key,w};
+      break;
+    }
+  }
+  if(!walletApi){
+    walletStatus('❌ No wallet extension found. Install Slush or Suiet.','var(--v-red)');
+    return;
+  }
+  try{
+    if(walletApi.w.connect) await walletApi.w.connect();
+    let addr='';
+    if(walletApi.w.getAccounts){
+      const accs=await walletApi.w.getAccounts();
+      addr=accs?.[0]?.address||accs?.[0]||'';
+    } else if(walletApi.w.account){
+      addr=walletApi.w.account?.address||'';
+    }
+    walletStatus(`✓ Connected: ${addr?addr.slice(0,10)+'...':walletApi.key}`,'var(--v-green)');
+    document.getElementById('wallet-execute-btn').style.display='block';
+  }catch(err){
+    walletStatus(`❌ Connect failed: ${err.message}`,'var(--v-red)');
+  }
+}
+
+async function executeRecall(){
+  const dvdId=document.getElementById('wallet-dvd').value.trim();
+  const profileId=document.getElementById('wallet-profile').value.trim();
+  if(!dvdId||!profileId){
+    walletStatus('❌ Please fill in DVD and Profile IDs','var(--v-red)'); return;
+  }
+  if(!walletApi){
+    walletStatus('❌ Connect wallet first','var(--v-red)'); return;
+  }
+
+  const hqTile=tiles.find(t=>t.pid===garrisonPid&&t.isHQ&&t.oid);
+  if(!hqTile){
+    walletStatus('❌ HQ object ID not found in data. Re-run data fetch first.','var(--v-red)'); return;
+  }
+
+  // Save DVD ID for next time
+  localStorage.setItem('vendetta_dvd_id', dvdId);
+
+  // Build list of individual move calls: {fromOid, type, count}
+  const sel=garrisonRows.filter(r=>r.selected&&!r.tile.isHQ&&r.tile.oid);
+  const calls=[];
+  for(const row of sel){
+    const t=row.tile;
+    if(t.gE>0) calls.push({fromOid:t.oid, type:'enforcer',  count:t.gE});
+    if(t.gB>0) calls.push({fromOid:t.oid, type:'bouncer',   count:t.gB});
+    if(t.gH>0) calls.push({fromOid:t.oid, type:'henchman',  count:t.gH});
+  }
+
+  // Split into batches of MAX_CALLS_PER_TX individual unit moves
+  // Each call moves `count` units at once (count is a u64 parameter)
+  // So actually each call in calls[] is ONE Move call, not count calls
+  // Based on the transaction: each call moves N units of one type from one turf
+  const totalCalls=calls.length;
+  const batches=[];
+  for(let i=0;i<calls.length;i+=MAX_CALLS_PER_TX){
+    batches.push(calls.slice(i,i+MAX_CALLS_PER_TX));
+  }
+
+  const prog=document.getElementById('wallet-progress');
+  let done=0;
+
+  for(let b=0;b<batches.length;b++){
+    prog.textContent=`Building transaction ${b+1}/${batches.length}...`;
+    prog.style.color='#888';
+
+    // Build TransactionBlock using @mysten/sui.js if available, else fallback
+    let txResult;
+    try{
+      txResult = await buildAndSignTx(batches[b], dvdId, profileId, hqTile.oid);
+      done+=batches[b].length;
+      prog.textContent=`✓ Tx ${b+1}/${batches.length} done · ${done}/${totalCalls} calls submitted`;
+      prog.style.color='var(--v-green)';
+    }catch(err){
+      prog.textContent=`❌ Tx ${b+1} failed: ${err.message}`;
+      prog.style.color='var(--v-red)';
+      break;
+    }
+  }
+}
+
+async function buildAndSignTx(calls, dvdId, profileId, hqOid){
+  // Build a raw transaction using the wallet's signAndExecuteTransactionBlock
+  // We use the serialized PTB format supported by Slush/Suiet
+
+  // Try @mysten/sui TransactionBlock if loaded
+  if(window.SuiTransaction){
+    return buildWithSuiSdk(calls, dvdId, profileId, hqOid);
+  }
+
+  // Fallback: use wallet's moveCall method if supported
+  const w=walletApi.w;
+
+  // Build PTB as JSON for wallets that support it
+  const txInputs=[];
+  const txCalls=[];
+
+  // Shared object helper
+  const shared=(id, iv, mutable)=>({objectId:id, initialSharedVersion:String(iv), mutable});
+  // We need the initialSharedVersions — use known values from the reference tx
+  const SHARED_VERSIONS={
+    [GAME_CONFIG]: '587268221',
+    [TURF_REG]:    '587268220',
+    [ITEM_REG]:    '501692172',
+    [GANG_CONFIG]: '587268217',
+    [SCORE_REG]:   '587268220',
+    [CLOCK]:       '1',
+  };
+
+  // Try signAndExecuteTransaction (newer API)
+  if(w.signAndExecuteTransaction||w.signAndExecuteTransactionBlock){
+    // Use unsafe_moveCall approach via wallet.executeMoveCall if available
+    // Many wallets support a simple array of move calls
+    const fn = w.signAndExecuteTransaction||w.signAndExecuteTransactionBlock;
+
+    // Build a minimal PTB JSON — most wallets accept this format
+    const transaction = {
+      kind: 'ProgrammableTransaction',
+      inputs: buildInputs(calls, dvdId, profileId, hqOid, SHARED_VERSIONS),
+      transactions: buildMoveCallsFromInputs(calls),
+    };
+
+    return await fn({transaction, options:{showEffects:true}});
+  }
+
+  throw new Error('Wallet API not supported. Try Slush or Suiet.');
+}
+
+function buildInputs(calls, dvdId, profileId, hqOid, sv){
+  // Fixed inputs shared across all calls (indices 0-8,11 from reference tx)
+  const inputs=[
+    {type:'object', objectType:'sharedObject', objectId:GAME_CONFIG,  initialSharedVersion:sv[GAME_CONFIG],  mutable:false},
+    {type:'object', objectType:'immOrOwnedObject', objectId:dvdId},
+    {type:'object', objectType:'sharedObject', objectId:profileId,    initialSharedVersion:'587916836', mutable:false},
+    {type:'object', objectType:'sharedObject', objectId:TURF_REG,     initialSharedVersion:sv[TURF_REG],     mutable:false},
+    {type:'object', objectType:'sharedObject', objectId:ITEM_REG,     initialSharedVersion:sv[ITEM_REG],     mutable:false},
+    {type:'object', objectType:'sharedObject', objectId:GANG_CONFIG,  initialSharedVersion:sv[GANG_CONFIG],  mutable:false},
+  ];
+  // Per-call: from_turf, gangster_name, count; to_turf and clock are fixed
+  // to_turf (HQ) — index 6 base, but we add it once since it's the same for all
+  inputs.push({type:'object', objectType:'sharedObject', objectId:hqOid, initialSharedVersion:'610657579', mutable:true}); // idx 6: placeholder HQ
+  inputs.push({type:'object', objectType:'sharedObject', objectId:SCORE_REG, initialSharedVersion:sv[SCORE_REG], mutable:false}); // idx 7
+  inputs.push({type:'object', objectType:'sharedObject', objectId:CLOCK,     initialSharedVersion:sv[CLOCK],     mutable:false}); // idx 8
+
+  // Variable inputs per call
+  for(const c of calls){
+    inputs.push({type:'object', objectType:'sharedObject', objectId:c.fromOid, initialSharedVersion:'0', mutable:true}); // from turf
+    inputs.push({type:'pure', valueType:'0x1::string::String', value:c.type});
+    inputs.push({type:'pure', valueType:'u64', value:String(c.count)});
+  }
+  return inputs;
+}
+
+function buildMoveCallsFromInputs(calls){
+  const txCalls=[];
+  const BASE=9; // first variable input index
+  for(let i=0;i<calls.length;i++){
+    const fromIdx=BASE+i*3;
+    const typeIdx=BASE+i*3+1;
+    const cntIdx =BASE+i*3+2;
+    txCalls.push({
+      MoveCall:{
+        package:GAME_PKG, module:'game', function:'move_gangster_free',
+        arguments:[
+          {Input:0},{Input:1},{Input:2},{Input:3},{Input:4},{Input:5},
+          {Input:fromIdx},{Input:6},{Input:7},
+          {Input:typeIdx},{Input:cntIdx},{Input:8}
+        ]
+      }
+    });
+  }
+  return txCalls;
+}
+
+document.getElementById('wallet-modal').addEventListener('click',e=>{
+  if(e.target===document.getElementById('wallet-modal')) closeWalletModal();
 });
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
