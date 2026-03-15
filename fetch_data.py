@@ -200,9 +200,21 @@ for i in range(0, len(tile_ids), BATCH):
         if not pid or pid == NULL_ID:
             unclaimed += 1; continue
         # ── GARRISON (v2.6) ──────────────────────────────────────────────────
-        garrison_count = int(f.get("garrison_count", 0) or 0)
+        # garrison is a VecMap<String, u64> stored as:
+        # garrison.fields.contents = [{fields:{key:"enforcer",value:"12"}},...]
+        g_h = g_b = g_e = 0
+        gar = f.get("garrison")
+        if isinstance(gar, dict):
+            contents = gar.get("fields", {}).get("contents", [])
+            for entry in contents:
+                ef = entry.get("fields", {}) if isinstance(entry, dict) else {}
+                k = (ef.get("key") or "").lower()
+                v = int(ef.get("value", 0) or 0)
+                if k == "henchman":   g_h = v
+                elif k == "bouncer":  g_b = v
+                elif k == "enforcer": g_e = v
         raw_tiles.append({"x": x, "y": y, "pid": pid, "hq": tile_id in hq_set,
-                          "garrison_count": garrison_count})
+                          "g_h": g_h, "g_b": g_b, "g_e": g_e})
         owner_count[pid] = owner_count.get(pid, 0) + 1
     if i % 2000 == 0 and i > 0: print(f"  {i}/{len(tile_ids)} tiles → {len(owner_count)} players")
     time.sleep(DELAY)
@@ -245,7 +257,9 @@ for t in raw_tiles:
     if idx is None: continue
     entry = {"x": t["x"], "y": t["y"], "p": idx}
     if t["hq"]: entry["hq"] = True
-    if t.get("garrison_count"): entry["gc"] = t["garrison_count"]
+    if t.get("g_h"): entry["g_h"] = t["g_h"]
+    if t.get("g_b"): entry["g_b"] = t["g_b"]
+    if t.get("g_e"): entry["g_e"] = t["g_e"]
     compact_tiles.append(entry)
 
 now_utc = datetime.now(timezone.utc)
