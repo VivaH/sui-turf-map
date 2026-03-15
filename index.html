@@ -563,6 +563,7 @@ async function loadData(url){
     }
 
     computeNeighborMap();
+    buildGarrisonIndex();
     updateStats();
     filterPlayers();
     document.getElementById('csvBtn').style.display='';
@@ -1235,14 +1236,25 @@ function _fp(){
 }
 // ── MARKS (friend / enemy) ────────────────────────────────────────────────────
 const MARKS_KEY = 'sui_turf_marks';
+let _marksCache = null; // in-memory cache
 
 function loadMarks(){
-  try{ return JSON.parse(localStorage.getItem(MARKS_KEY)||'{}'); }
-  catch(e){ return {}; }
+  if(_marksCache) return _marksCache;
+  try{ _marksCache=JSON.parse(localStorage.getItem(MARKS_KEY)||'{}'); }
+  catch(e){ _marksCache={}; }
+  return _marksCache;
 }
-function saveMarks(m){ localStorage.setItem(MARKS_KEY, JSON.stringify(m)); }
+function saveMarks(m){ _marksCache=m; localStorage.setItem(MARKS_KEY, JSON.stringify(m)); }
+function getMark(pid){ return loadMarks()[pid]||null; }
 
-function getMark(pid){ return loadMarks()[pid]||null; } // 'friend'|'enemy'|null
+// Pre-computed set of pids that have any garrison — rebuilt after each data load
+let garrisonedPids = new Set();
+function buildGarrisonIndex(){
+  garrisonedPids.clear();
+  for(const t of tiles){
+    if(t.gH||t.gB||t.gE) garrisonedPids.add(t.pid);
+  }
+}
 
 function toggleMark(pid, type, e){
   if(e){ e.stopPropagation(); }
@@ -1252,11 +1264,9 @@ function toggleMark(pid, type, e){
   saveMarks(marks);
   renderPlayerList();
   drawMap();
-  // Refresh neighbor popup if open
+  // Refresh neighbor popup marks if open
   const popup = document.getElementById('neighbor-popup');
   if(popup.style.display!=='none'){
-    const title = document.getElementById('neighbor-title').textContent;
-    // re-render neighbor list marks
     popup.querySelectorAll('.nmark').forEach(btn=>{
       const npid = btn.dataset.pid;
       const mtype = btn.dataset.mtype;
@@ -1277,7 +1287,17 @@ function markColor(pid, defaultColor){
 function renderPlayerList(){
   const maxT=filteredPlayers.length?filteredPlayers[0].tiles:1;
   const marks=loadMarks();
-  document.getElementById('player-list').innerHTML=filteredPlayers.map((p,i)=>{
+  const el=document.getElementById('player-list');
+
+  if(!filteredPlayers.length){
+    el.innerHTML='<div style="color:#444;padding:1rem;font-size:12px">No results</div>';
+    return;
+  }
+
+  // Build all HTML in one pass then set innerHTML once
+  const parts=new Array(filteredPlayers.length);
+  for(let i=0;i<filteredPlayers.length;i++){
+    const p=filteredPlayers[i];
     const me=MY_IDS.has(p.pid);
     const isA=p.pid===routePidA,isB=p.pid===routePidB;
     const mark=marks[p.pid]||null;
@@ -1287,20 +1307,20 @@ function renderPlayerList(){
     const friendCls=mark==='friend'?'mark-friend':'';
     const enemyCls=mark==='enemy'?'mark-enemy':'';
     const dotCol=markColor(p.pid,p.color);
-    const garTiles=tiles.filter(t=>t.pid===p.pid&&(t.gH||t.gB||t.gE));
-    const hasGar=garTiles.length>0;
-    return `<div class="${rowCls}${hasGar?' has-garrison':''}" onclick="onPClick('${p.pid}',event)">
-      <span class="prank">${i+1}</span>
-      <span class="pdot" style="background:${dotCol}"></span>
-      ${nm}
-      <span class="ptiles">${p.tiles.toLocaleString('en')}</span>
-      <div class="pbar"><div class="pbar-fill" style="width:${Math.round(p.tiles/maxT*100)}%;background:${dotCol}"></div></div>
-      <button class="p-gar-btn" onclick="openGarrison('${p.pid}',event)" title="Garrison overview">🛡</button>
-      <button class="p-mark-btn ${friendCls}" onclick="toggleMark('${p.pid}','friend',event)" title="Mark as friend">♥</button>
-      <button class="p-mark-btn ${enemyCls}" onclick="toggleMark('${p.pid}','enemy',event)" title="Mark as enemy">✕</button>
-      <button class="p-route-btn" onclick="onRouteBtn('${p.pid}',event)">${rl}</button>
-    </div>`;
-  }).join('')||'<div style="color:#444;padding:1rem;font-size:12px">No results</div>';
+    const hasGar=garrisonedPids.has(p.pid);
+    parts[i]=`<div class="${rowCls}${hasGar?' has-garrison':''}" onclick="onPClick('${p.pid}',event)">` +
+      `<span class="prank">${i+1}</span>` +
+      `<span class="pdot" style="background:${dotCol}"></span>` +
+      nm +
+      `<span class="ptiles">${p.tiles.toLocaleString('en')}</span>` +
+      `<div class="pbar"><div class="pbar-fill" style="width:${Math.round(p.tiles/maxT*100)}%;background:${dotCol}"></div></div>` +
+      `<button class="p-gar-btn" onclick="openGarrison('${p.pid}',event)" title="Garrison overview">🛡</button>` +
+      `<button class="p-mark-btn ${friendCls}" onclick="toggleMark('${p.pid}','friend',event)" title="Mark as friend">♥</button>` +
+      `<button class="p-mark-btn ${enemyCls}" onclick="toggleMark('${p.pid}','enemy',event)" title="Mark as enemy">✕</button>` +
+      `<button class="p-route-btn" onclick="onRouteBtn('${p.pid}',event)">${rl}</button>` +
+      `</div>`;
+  }
+  el.innerHTML=parts.join('');
 }
 function onSearchInput(el){
   document.getElementById('search-clear').style.display=el.value?'block':'none';
