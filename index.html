@@ -176,7 +176,7 @@ button:disabled{opacity:0.4;cursor:default}
 <body>
 
 <div id="toolbar">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v2.1</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:10px;color:#555;margin-right:4px;flex-shrink:0">v2.2</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#3a3a1e;color:#FAC775">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -1198,15 +1198,25 @@ async function exportGIF(){
 
   const gif=new GIF({
     workers:2,
-    quality:8,
-    width:W,
-    height:H,
+    quality:10,
+    width:Math.round(W/2),
+    height:Math.round(H/2),
     workerScript:'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
   });
 
   const offscreen=document.createElement('canvas');
-  offscreen.width=W; offscreen.height=H;
+  const GW=Math.round(W/2), GH=Math.round(H/2);
+  offscreen.width=GW; offscreen.height=GH;
   const octx=offscreen.getContext('2d');
+
+  // Timeout: if encoding takes more than 90s, abort
+  let encodingDone=false;
+  const encodingTimeout=setTimeout(()=>{
+    if(!encodingDone){
+      btn.disabled=false;btn.textContent='🎬 GIF';
+      status('GIF encoding timed out — try fewer snapshots or zoom in more');
+    }
+  },90000);
 
   status('Building GIF frames...');
 
@@ -1226,23 +1236,23 @@ async function exportGIF(){
         snapTiles.push({x:t.x,y:t.y,isHQ:!!t.hq,isMe,col});
       }
 
-      // Draw frame
+      // Draw frame at half size
       octx.fillStyle='#080810';
-      octx.fillRect(0,0,W,H);
-      const cs=CELL*zoom;
+      octx.fillRect(0,0,GW,GH);
+      const cs=CELL*zoom*0.5;
       for(const t of snapTiles){
-        const sx=(t.x-minX)*cs+panX, sy=(maxY-t.y)*cs+panY;
-        if(sx<-cs||sx>W||sy<-cs||sy>H) continue;
+        const sx=(t.x-minX)*cs+panX*0.5, sy=(maxY-t.y)*cs+panY*0.5;
+        if(sx<-cs||sx>GW||sy<-cs||sy>GH) continue;
         octx.fillStyle=t.isHQ?(t.isMe?'#533AB7':'#6B1A1A'):t.col;
-        octx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
+        octx.fillRect(sx+0.5,sy+0.5,Math.max(1,cs-1),Math.max(1,cs-1));
       }
-      // Label: date top-left
+      // Label
       octx.fillStyle='rgba(0,0,0,0.55)';
-      octx.fillRect(4,4,180,20);
+      octx.fillRect(3,3,150,18);
       octx.fillStyle='rgba(255,255,255,0.8)';
-      octx.font='12px system-ui,sans-serif';
+      octx.font='11px system-ui,sans-serif';
       octx.textAlign='left';octx.textBaseline='top';
-      octx.fillText('📅 '+snap.label,8,7);
+      octx.fillText('📅 '+snap.label,6,5);
 
       gif.addFrame(offscreen,{copy:true,delay:600});
     }catch(e){
@@ -1252,6 +1262,8 @@ async function exportGIF(){
   }
 
   gif.on('finished',blob=>{
+    encodingDone=true;
+    clearTimeout(encodingTimeout);
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
     a.download=`vendetta_map_${fileTimestamp()}.gif`;
