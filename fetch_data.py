@@ -201,12 +201,21 @@ for i in range(0, len(tile_ids), BATCH):
             unclaimed += 1; continue
         # ── GARRISON (v2.6) ──────────────────────────────────────────────────
         g_h = g_b = g_e = 0
-        gar = f.get("garrison") or f.get("guard") or {}
-        if isinstance(gar, dict):
-            gf = gar.get("fields", gar)
-            g_h = int(gf.get("henchman_count", gf.get("henchman", 0)) or 0)
-            g_b = int(gf.get("bouncer_count",  gf.get("bouncer",   0)) or 0)
-            g_e = int(gf.get("enforcer_count", gf.get("enforcer",  0)) or 0)
+        garrison_count = int(f.get("garrison_count", 0) or 0)
+        if garrison_count > 0:
+            gar = f.get("garrison") or {}
+            units = []
+            if isinstance(gar, dict):
+                units = gar.get("fields", {}).get("contents", []) or \
+                        gar.get("contents", []) or []
+            elif isinstance(gar, list):
+                units = gar
+            for unit in units:
+                ufields = unit.get("fields", unit) if isinstance(unit, dict) else {}
+                name = (ufields.get("gangster_name") or ufields.get("name") or "").lower()
+                if "henchman" in name:   g_h += 1
+                elif "bouncer" in name:  g_b += 1
+                elif "enforcer" in name: g_e += 1
         raw_tiles.append({"x": x, "y": y, "pid": pid, "hq": tile_id in hq_set,
                           "g_h": g_h, "g_b": g_b, "g_e": g_e})
         owner_count[pid] = owner_count.get(pid, 0) + 1
