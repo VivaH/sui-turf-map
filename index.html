@@ -2073,61 +2073,72 @@ async function connectWallet(){
   walletStatus('Looking for wallet...','#888');
   walletApi=null;
 
-  // Modern SUI Wallet Standard — Slush and other modern wallets register here
-  const standardWallets = (window.__suiWallets || []);
-  // Also check via wallet-standard registry if available
-  if(!standardWallets.length && window.navigator?.wallets){
-    try{
-      const wl = await window.navigator.wallets.get();
-      wl.forEach(w=>standardWallets.push(w));
-    }catch(e){}
-  }
-
-  if(standardWallets.length>0){
-    const w=standardWallets[0];
-    walletApi={key:'standard',w};
-    try{
-      // Connect using Wallet Standard
-      const features=w.features||{};
-      if(features['standard:connect']){
-        await features['standard:connect'].connect();
-      }
-      const accounts=w.accounts||[];
-      const addr=accounts[0]?.address||'';
-      walletStatus(`✓ Connected: ${addr?addr.slice(0,10)+'...':w.name}`,'var(--v-green)');
-      document.getElementById('wallet-execute-btn').style.display='block';
-      return;
-    }catch(err){
-      walletStatus(`❌ Connect failed: ${err.message}`,'var(--v-red)');
-      return;
+  // Slush uses the Wallet Standard via @wallet-standard/app
+  // It registers wallets via a 'wallet-standard:app-ready' event or
+  // via getWallets() from the wallet-standard package
+  // Try to get wallets via the global registry
+  const getWalletsFn = window.getWallets || window.__getWallets;
+  if(getWalletsFn){
+    const registry = getWalletsFn();
+    const wallets = registry.get ? registry.get() : (registry.wallets || []);
+    if(wallets.length>0){
+      return connectStandardWallet(wallets[0]);
     }
   }
 
-  // Legacy fallback: window.slush, window.suiWallet, window.suiet etc.
-  const legacyKeys=['slush','suiWallet','suiet','sui','okxwallet','martian'];
+  // Also check __suiWallets
+  if(window.__suiWallets?.length>0){
+    return connectStandardWallet(window.__suiWallets[0]);
+  }
+
+  // Listen for wallet announcements (MIPD / wallet-standard)
+  walletStatus('Waiting for wallet announcement...','#888');
+  await new Promise((resolve)=>{
+    const timeout=setTimeout(()=>resolve(), 2000);
+    // Wallet Standard announcement
+    window.addEventListener('wallet-standard:register-wallet', (e)=>{
+      clearTimeout(timeout);
+      walletApi={key:'standard-event', w:e.detail||e};
+      resolve();
+    },{once:true});
+    // Trigger wallets to announce themselves
+    window.dispatchEvent(new Event('wallet-standard:app-ready'));
+  });
+
+  if(walletApi?.w){
+    return connectStandardWallet(walletApi.w);
+  }
+
+  // Legacy fallback
+  const legacyKeys=['slush','suiWallet','suiet','sui','martian'];
   for(const key of legacyKeys){
     const w=window[key];
     if(w&&(w.connect||w.signAndExecuteTransactionBlock||w.signAndExecuteTransaction)){
       walletApi={key,w};
-      break;
+      try{
+        if(w.connect) await w.connect();
+        walletStatus(`✓ Connected via ${key}`,'var(--v-green)');
+        document.getElementById('wallet-execute-btn').style.display='block';
+        return;
+      }catch(err){
+        walletStatus(`❌ Connect failed: ${err.message}`,'var(--v-red)');
+        return;
+      }
     }
   }
 
-  if(!walletApi){
-    walletStatus('❌ No wallet found. Make sure Slush is installed and this page is https:// or localhost.','var(--v-red)');
-    return;
-  }
+  walletStatus('❌ Slush wallet not detected. Try refreshing the page after installing Slush, or open DevTools console and type: window.__suiWallets','var(--v-red)');
+}
 
+async function connectStandardWallet(w){
   try{
-    if(walletApi.w.connect) await walletApi.w.connect();
-    let addr='';
-    if(walletApi.w.getAccounts){
-      const accs=await walletApi.w.getAccounts();
-      addr=accs?.[0]?.address||accs?.[0]||'';
-    } else if(walletApi.w.account){
-      addr=walletApi.w.account?.address||'';
-    }
-    walletStatus(`✓ Connected: ${addr?addr.slice(0,10)+'...':walletApi.key}`,'var(--v-green)');
+    const features=w.features||{};
+    const connectFn=features['standard:connect'];
+    if(connectFn) await connectFn.connect();
+    const accounts=w.accounts||[];
+    const addr=accounts[0]?.address||'';
+    walletApi={key:'standard', w};
+    walletStatus(`✓ Connected: ${addr?addr.slice(0,12)+'...':w.name||'wallet'}`,'var(--v-green)');
     document.getElementById('wallet-execute-btn').style.display='block';
   }catch(err){
     walletStatus(`❌ Connect failed: ${err.message}`,'var(--v-red)');
