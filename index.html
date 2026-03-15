@@ -2124,10 +2124,10 @@ async function connectStandardWallet(w){
   try{
     const features=w.features||{};
     const connectFn=features['standard:connect'];
-    if(connectFn) await connectFn.connect();
-    const accounts=w.accounts||[];
+    const result=connectFn?await connectFn.connect():null;
+    const accounts=result?.accounts?.length?result.accounts:(w.accounts||[]);
     const addr=accounts[0]?.address||'';
-    walletApi={key:'standard', w};
+    walletApi={key:'standard', w, accounts};
     walletStatus(`✓ Connected: ${addr?addr.slice(0,12)+'...':w.name||'wallet'}`,'var(--v-green)');
     document.getElementById('wallet-execute-btn').style.display='block';
   }catch(err){
@@ -2202,7 +2202,7 @@ async function loadSuiSdk(){
   if(window.__suiSdkLoaded) return;
   await new Promise((resolve,reject)=>{
     const s=document.createElement('script');
-    s.src='https://unpkg.com/@mysten/sui@latest/dist/umd/index.js';
+    s.src='https://unpkg.com/@mysten/sui@1.21.2/dist/umd/index.js'; // pinned stable version
     s.onload=resolve; s.onerror=reject;
     document.head.appendChild(s);
   });
@@ -2213,102 +2213,61 @@ async function loadSuiSdk(){
 async function buildAndSignTx(calls, dvdId, profileId, hqOid){
   const w=walletApi.w;
 
-  // Load @mysten/sui SDK for Transaction builder
   await loadSuiSdk();
-  const SuiLib=window.sui||window.SuiLib||window['@mysten/sui'];
-  if(!SuiLib?.Transaction) throw new Error('SUI SDK not loaded. Check CDN connection.');
+  // Bug 1 fix: correct UMD global is window.sui
+  const {Transaction, SuiClient, getFullnodeUrl}=window.sui||{};
+  if(!Transaction) throw new Error('SUI SDK not loaded. Check CDN connection.');
 
-  const tx=new SuiLib.Transaction();
+  // Bug 2 fix: create client so SDK can resolve shared object versions
+  const suiClient=new SuiClient({url:getFullnodeUrl('mainnet')});
 
-  // Fixed shared objects
-  const gameConfig=tx.object(GAME_CONFIG);
-  const dvd=tx.object(dvdId);
-  const profile=tx.object(profileId);
-  const turfReg=tx.object(TURF_REG);
-  const itemReg=tx.object(ITEM_REG);
-  const gangConfig=tx.object(GANG_CONFIG);
-  const scoreReg=tx.object(SCORE_REG);
-  const clock=tx.object(CLOCK);
-  const hqObj=tx.object(hqOid);
+  const tx=new Transaction();
 
   for(const c of calls){
-    const fromTurf=tx.object(c.fromOid);
     tx.moveCall({
       target:`${GAME_PKG}::game::move_gangster_free`,
       arguments:[
-        gameConfig, dvd, profile, turfReg, itemReg, gangConfig,
-        fromTurf, hqObj, scoreReg,
+        tx.object(GAME_CONFIG),
+        tx.object(dvdId),
+        tx.object(profileId),
+        tx.object(TURF_REG),
+        tx.object(ITEM_REG),
+        tx.object(GANG_CONFIG),
+        tx.object(c.fromOid),
+        tx.object(hqOid),
+        tx.object(SCORE_REG),
         tx.pure.string(c.type),
-        tx.pure.u64(c.count),
-        clock,
+        tx.pure.u64(BigInt(c.count)),
+        tx.object(CLOCK),
       ],
     });
   }
 
-  // Sign via Wallet Standard
+  // Use accounts stored at connect time, fall back to wallet's accounts
+  const account=walletApi.accounts?.[0]||walletApi.w.accounts?.[0];
+  if(account?.address) tx.setSenderIfNotSet(account.address);
+  await tx.build({client:suiClient});
+
+  // Bug 3 fix: pass account + chain to signing call
   if(walletApi.key==='standard'){
     const features=w.features||{};
-    const signFn=features['sui:signAndExecuteTransaction']||features['sui:signAndExecuteTransactionBlock'];
-    if(signFn){
+    const signFn=features['sui:signAndExecuteTransaction'];
+    if(!signFn) throw new Error('Wallet does not support signAndExecuteTransaction');
+    try{
       return await signFn.signAndExecuteTransaction({
-        transaction:tx, chain:'sui:mainnet', options:{showEffects:true}
+        transaction:tx,
+        account,
+        chain:'sui:mainnet',
       });
+    }catch(err){
+      throw new Error(err?.message??JSON.stringify(err));
     }
-    throw new Error('Wallet does not support signAndExecuteTransaction');
   }
 
-  // Legacy API
+  // Legacy fallback
   const signFn=w.signAndExecuteTransaction||w.signAndExecuteTransactionBlock;
-  if(signFn){
-    return await signFn.call(w,{transaction:tx, chain:'sui:mainnet', options:{showEffects:true}});
-  }
+  if(signFn) return await signFn.call(w,{transaction:tx, chain:'sui:mainnet'});
   throw new Error('Wallet API not supported.');
-}
-
-function buildInputs(calls, dvdId, profileId, hqOid, sv){
-  // Fixed inputs shared across all calls (indices 0-8,11 from reference tx)
-  const inputs=[
-    {type:'object', objectType:'sharedObject', objectId:GAME_CONFIG,  initialSharedVersion:sv[GAME_CONFIG],  mutable:false},
-    {type:'object', objectType:'immOrOwnedObject', objectId:dvdId},
-    {type:'object', objectType:'sharedObject', objectId:profileId,    initialSharedVersion:'587916836', mutable:false},
-    {type:'object', objectType:'sharedObject', objectId:TURF_REG,     initialSharedVersion:sv[TURF_REG],     mutable:false},
-    {type:'object', objectType:'sharedObject', objectId:ITEM_REG,     initialSharedVersion:sv[ITEM_REG],     mutable:false},
-    {type:'object', objectType:'sharedObject', objectId:GANG_CONFIG,  initialSharedVersion:sv[GANG_CONFIG],  mutable:false},
-  ];
-  // Per-call: from_turf, gangster_name, count; to_turf and clock are fixed
-  // to_turf (HQ) — index 6 base, but we add it once since it's the same for all
-  inputs.push({type:'object', objectType:'sharedObject', objectId:hqOid, initialSharedVersion:'610657579', mutable:true}); // idx 6: placeholder HQ
-  inputs.push({type:'object', objectType:'sharedObject', objectId:SCORE_REG, initialSharedVersion:sv[SCORE_REG], mutable:false}); // idx 7
-  inputs.push({type:'object', objectType:'sharedObject', objectId:CLOCK,     initialSharedVersion:sv[CLOCK],     mutable:false}); // idx 8
-
-  // Variable inputs per call
-  for(const c of calls){
-    inputs.push({type:'object', objectType:'sharedObject', objectId:c.fromOid, initialSharedVersion:'0', mutable:true}); // from turf
-    inputs.push({type:'pure', valueType:'0x1::string::String', value:c.type});
-    inputs.push({type:'pure', valueType:'u64', value:String(c.count)});
-  }
-  return inputs;
-}
-
-function buildMoveCallsFromInputs(calls){
-  const txCalls=[];
-  const BASE=9; // first variable input index
-  for(let i=0;i<calls.length;i++){
-    const fromIdx=BASE+i*3;
-    const typeIdx=BASE+i*3+1;
-    const cntIdx =BASE+i*3+2;
-    txCalls.push({
-      MoveCall:{
-        package:GAME_PKG, module:'game', function:'move_gangster_free',
-        arguments:[
-          {Input:0},{Input:1},{Input:2},{Input:3},{Input:4},{Input:5},
-          {Input:fromIdx},{Input:6},{Input:7},
-          {Input:typeIdx},{Input:cntIdx},{Input:8}
-        ]
-      }
-    });
-  }
-  return txCalls;
 }
 
 document.getElementById('wallet-modal').addEventListener('click',e=>{
