@@ -2214,24 +2214,28 @@ async function executeRecall(){
 }
 
 async function loadSuiSdk(){
-  if(window.__suiSdkLoaded) return;
-  // UMD script tag — avoids class identity mismatch with Slush's bundled SDK
-  await new Promise((resolve,reject)=>{
-    const s=document.createElement('script');
-    s.src='https://unpkg.com/@mysten/sui@1.21.2/dist/umd/index.js';
-    s.onload=resolve;
-    s.onerror=()=>reject(new Error('Failed to load SUI SDK from CDN (network or CORS issue)'));
-    document.head.appendChild(s);
-  });
-  window.__suiSdkLoaded=true;
-  await new Promise(r=>setTimeout(r,100));
-  console.log('✅ SUI SDK loaded via UMD, Transaction:', !!window.sui?.Transaction);
+  if(window.__suiSdk) return;
+  try{
+    // ESM dynamic import via esm.sh — @mysten/sui has no UMD build
+    const [txMod, clientMod] = await Promise.all([
+      import('https://esm.sh/@mysten/sui@1.21.2/transactions'),
+      import('https://esm.sh/@mysten/sui@1.21.2/client'),
+    ]);
+    window.__suiSdk = {
+      Transaction: txMod.Transaction,
+      SuiClient: clientMod.SuiClient,
+      getFullnodeUrl: clientMod.getFullnodeUrl,
+    };
+    console.log('✅ SUI SDK loaded via ESM, Transaction:', !!window.__suiSdk.Transaction);
+  }catch(e){
+    throw new Error('Failed to load SUI SDK from esm.sh: '+(e?.message||e));
+  }
 }
 
 async function buildAndSignTx(calls, dvdId, profileId, hqOid){
   console.log('🔧 [1/5] Loading SUI SDK...');
   await loadSuiSdk();
-  const {Transaction, SuiClient, getFullnodeUrl}=window.sui||{};
+  const {Transaction, SuiClient, getFullnodeUrl}=window.__suiSdk||{};
   if(!Transaction) throw new Error('SUI SDK not loaded. Check CDN connection.');
   console.log('🔧 [2/5] SDK ready. Building tx with',calls.length,'calls...');
 
