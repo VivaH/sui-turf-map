@@ -1681,14 +1681,14 @@ async function triggerRefresh(){
   const el=document.getElementById('refresh-result');
   el.style.color='#888';el.textContent='Triggering workflow...';
   try{
-    const r=await fetch('https://api.github.com/repos/Hook27/sui-turf-map/dispatches',{
+    const r=await fetch('https://api.github.com/repos/Hook27/sui-turf-map/actions/workflows/trigger.yml/dispatches',{
       method:'POST',
       headers:{
-        'Authorization':'Bearer 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',
+        'Authorization':'Bearer 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',
         'Accept':'application/vnd.github.v3+json',
         'Content-Type':'application/json'
       },
-      body:JSON.stringify({event_type:'refresh-map'})
+      body:JSON.stringify({ref:'main'})
     });
     if(r.status===204){el.style.color='#1D9E75';el.textContent='✓ Workflow started! Data will update in ~10 minutes.';}
     else{const d=await r.json();el.style.color='#E24B4A';el.textContent='Error '+r.status+': '+(d.message||'unknown');}
