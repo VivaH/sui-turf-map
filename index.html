@@ -262,6 +262,13 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 #wallet-progress{font-size:10px;color:#555;margin-top:8px;min-height:16px}
 #wallet-close{background:transparent;border:none;color:#555;font-size:18px;cursor:pointer;padding:0;line-height:1;box-shadow:none;float:right;margin-top:-30px}
 
+/* ── COORDINATE RULER ── */
+#ruler-x{position:absolute;top:0;left:0;right:0;height:18px;pointer-events:none;overflow:hidden;z-index:5}
+#ruler-y{position:absolute;top:0;left:0;bottom:0;width:28px;pointer-events:none;overflow:hidden;z-index:5}
+.ruler-tick{position:absolute;font-size:8px;font-family:var(--font-mono);color:#444;white-space:nowrap}
+#ruler-x .ruler-tick{top:2px;transform:translateX(-50%)}
+#ruler-y .ruler-tick{left:1px;transform:translateY(-50%)}
+
 /* ── EXPORT DROPDOWN ── */
 #export-dropdown{position:relative;display:inline-block}
 #export-menu{display:none;position:absolute;top:100%;left:0;background:#111;border:2px solid #333;box-shadow:4px 4px 0 #000;z-index:200;min-width:120px;margin-top:2px}
@@ -312,7 +319,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 <body>
 
 <div id="toolbar">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v2.9</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v2.91</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh data</button>
   <div class="sep"></div>
@@ -356,6 +363,8 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 <div id="main">
   <div id="map-wrap">
     <canvas id="map"></canvas>
+    <div id="ruler-x"></div>
+    <div id="ruler-y"></div>
     <div id="zoom-indicator">zoom ×1.0</div>
     <div id="garrison-legend">
       <div class="gl-title">Garrison</div>
@@ -931,6 +940,7 @@ function drawMap(){
   const W=cv.width,H=cv.height;
   ctx.fillStyle='#080810';ctx.fillRect(0,0,W,H);
   updateZoomIndicator();
+  updateRuler();
   if(!tiles.length) return;
   const cs=CELL*zoom;
   const wx0=Math.floor((0-panX)/(CELL*zoom))+minX-1;
@@ -1340,7 +1350,7 @@ function zoomBy(f){
 function resetView(){
   if(!tiles.length) return;
   const cv=document.getElementById('map');
-  zoom=Math.min(cv.width/((maxX-minX+1)*CELL),cv.height/((maxY-minY+1)*CELL))*0.9;
+  zoom=Math.max(0.2,Math.min(cv.width/((maxX-minX+1)*CELL),cv.height/((maxY-minY+1)*CELL))*0.9);
   panX=(cv.width-(maxX-minX+1)*CELL*zoom)/2;panY=(cv.height-(maxY-minY+1)*CELL*zoom)/2;
   drawMap();drawMinimap();
 }
@@ -2383,7 +2393,43 @@ document.getElementById('wallet-modal').addEventListener('click',e=>{
   if(e.target===document.getElementById('wallet-modal')) closeWalletModal();
 });
 
-// ── EXPORT DROPDOWN ──────────────────────────────────────────────────────────
+// ── COORDINATE RULER ─────────────────────────────────────────────────────────
+function updateRuler(){
+  if(!tiles.length) return;
+  const cv=document.getElementById('map');
+  const W=cv.width, H=cv.height;
+  const cs=CELL*zoom;
+
+  // Decide tick spacing based on zoom
+  const minPx=40; // minimum pixels between ticks
+  const candidates=[1,2,5,10,20,50,100,200];
+  let step=candidates.find(s=>s*cs>=minPx)||200;
+
+  // X ruler
+  const rx=document.getElementById('ruler-x');
+  const wx0=Math.ceil((0-panX)/(cs)+minX/1);
+  const wx1=Math.floor((W-panX)/(cs)+minX/1);
+  const xStart=Math.ceil((Math.floor((0-panX)/cs)+minX)/step)*step;
+  let xHtml='';
+  for(let wx=xStart;wx<=(Math.floor((W-panX)/cs)+minX);wx+=step){
+    const sx=(wx-minX)*cs+panX;
+    if(sx<0||sx>W) continue;
+    xHtml+=`<span class="ruler-tick" style="left:${sx}px">${wx}</span>`;
+  }
+  rx.innerHTML=xHtml;
+
+  // Y ruler
+  const ry=document.getElementById('ruler-y');
+  const yStart=Math.ceil((Math.floor(maxY-(H-panY)/cs))/step)*step;
+  const yEnd=Math.floor(maxY-(-panY)/cs);
+  let yHtml='';
+  for(let wy=yStart;wy<=yEnd;wy+=step){
+    const sy=(maxY-wy)*cs+panY;
+    if(sy<0||sy>H) continue;
+    yHtml+=`<span class="ruler-tick" style="top:${sy}px">${wy}</span>`;
+  }
+  ry.innerHTML=yHtml;
+}
 function toggleExportMenu(){
   document.getElementById('export-menu').classList.toggle('open');
 }
