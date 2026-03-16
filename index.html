@@ -2200,27 +2200,16 @@ async function executeRecall(){
 
 async function loadSuiSdk(){
   if(window.__suiSdkLoaded) return;
+  // UMD script tag — avoids class identity mismatch with Slush's bundled SDK
   await new Promise((resolve,reject)=>{
     const s=document.createElement('script');
-    // jsDelivr serves correct CORS headers and has the right UMD path
-    s.src='https://cdn.jsdelivr.net/npm/@mysten/sui@1.21.2/dist/umd/index.umd.js';
-    s.onload=()=>{
-      // The UMD bundle may register as window.sui or window._mysten_sui
-      if(!window.sui && window._mysten_sui) window.sui=window._mysten_sui;
-      resolve();
-    };
-    s.onerror=()=>{
-      // Fallback to a different version path
-      const s2=document.createElement('script');
-      s2.src='https://cdn.jsdelivr.net/npm/@mysten/sui/dist/umd/index.umd.js';
-      s2.onload=resolve; s2.onerror=reject;
-      document.head.appendChild(s2);
-    };
+    s.src='https://unpkg.com/@mysten/sui@1.21.2/dist/umd/index.js';
+    s.onload=resolve; s.onerror=reject;
     document.head.appendChild(s);
   });
   window.__suiSdkLoaded=true;
-  await new Promise(r=>setTimeout(r,300));
-  console.log('SDK loaded, window.sui:', window.sui);
+  await new Promise(r=>setTimeout(r,100));
+  console.log('✅ SUI SDK loaded via UMD, Transaction:', !!window.sui?.Transaction);
 }
 
 async function buildAndSignTx(calls, dvdId, profileId, hqOid){
@@ -2229,7 +2218,6 @@ async function buildAndSignTx(calls, dvdId, profileId, hqOid){
   if(!Transaction) throw new Error('SUI SDK not loaded. Check CDN connection.');
 
   const tx=new Transaction();
-
   for(const c of calls){
     tx.moveCall({
       target:`${GAME_PKG}::game::move_gangster_free`,
@@ -2250,39 +2238,63 @@ async function buildAndSignTx(calls, dvdId, profileId, hqOid){
     });
   }
 
-  // Safely read address from Proxy account
   const rawAccount=walletApi.accounts?.[0]||walletApi.w.accounts?.[0];
   const address=rawAccount?.address;
   if(!address) throw new Error('No account address found. Reconnect wallet.');
 
+  // Build bytes ourselves — sidesteps class identity mismatch
+  const suiClient=new SuiClient({url:getFullnodeUrl('mainnet')});
   tx.setSenderIfNotSet(address);
-  // ✅ Do NOT call tx.build() — v2.0.0 wallets serialize the Transaction themselves
+  let txBytes;
+  try{
+    txBytes=await tx.build({client:suiClient});
+  }catch(buildErr){
+    throw new Error('Transaction build failed: '+(buildErr?.message??String(buildErr)));
+  }
 
   const features=walletApi.w.features||{};
-  const signFeat=features['sui:signAndExecuteTransaction'];
-  if(!signFeat) throw new Error('Wallet does not support sui:signAndExecuteTransaction');
 
-  // Find exact Proxy account by address match — preserves reference identity
-  const allAccounts=walletApi.w.accounts||[];
-  const matchedAccount=allAccounts.find(a=>a.address===address);
-  console.log('matchedAccount:', matchedAccount, 'allAccounts length:', allAccounts.length);
-
-  const acct=matchedAccount||{address, publicKey:rawAccount.publicKey, chains:['sui:mainnet'], features:[]};
-
-  try{
-    return await signFeat.signAndExecuteTransaction({
-      transaction:tx,
-      account:acct,
-      chain:'sui:mainnet',
-    });
-  }catch(err){
-    console.log('Slush rejection type:', typeof err, 'value:', err);
-    console.log('Keys:', err?Object.keys(err):'none');
-    const msg=err?.message
-      ??(err!==undefined?(()=>{try{return JSON.stringify(err);}catch{return String(err);}})():null)
-      ??'Wallet rejected the transaction (no reason given)';
-    throw new Error(msg);
+  // Strategy A — sui:signTransaction (v2) + manual execute via RPC
+  const signOnlyFeat=features['sui:signTransaction'];
+  if(signOnlyFeat?.signTransaction){
+    try{
+      const {bytes,signature}=await signOnlyFeat.signTransaction({
+        transaction:tx,
+        account:rawAccount,
+        chain:'sui:mainnet',
+      });
+      const result=await suiClient.executeTransactionBlock({
+        transactionBlock:bytes,
+        signature,
+        options:{showEffects:true,showErrors:true},
+      });
+      console.log('✅ Executed via sui:signTransaction, digest:',result.digest);
+      return result;
+    }catch(err){
+      console.warn('sui:signTransaction path failed:',err?.message??err,'— trying fallback');
+    }
   }
+
+  // Strategy B — sui:signAndExecuteTransaction (v2)
+  const signExecFeat=features['sui:signAndExecuteTransaction'];
+  if(signExecFeat?.signAndExecuteTransaction){
+    const allAccounts=walletApi.w.accounts||[];
+    const matchedAccount=allAccounts.find(a=>a.address===address)||rawAccount;
+    try{
+      const result=await signExecFeat.signAndExecuteTransaction({
+        transaction:tx,
+        account:matchedAccount,
+        chain:'sui:mainnet',
+      });
+      console.log('✅ Executed via sui:signAndExecuteTransaction');
+      return result;
+    }catch(err){
+      console.log('Slush rejection:',typeof err,err,err?Object.keys(err):'none');
+      throw new Error(err?.message??'Wallet rejected (no reason given)');
+    }
+  }
+
+  throw new Error('No supported signing feature found on wallet.');
 }
 
 document.getElementById('wallet-modal').addEventListener('click',e=>{
