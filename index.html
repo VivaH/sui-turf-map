@@ -204,9 +204,8 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 #ticker-bar.visible{display:flex}
 #ticker-label{font-family:var(--font-bangers);font-size:13px;color:var(--v-gold);letter-spacing:1px;padding:0 10px;white-space:nowrap;flex-shrink:0;border-right:2px solid #2a2000;height:100%;display:flex;align-items:center}
 #ticker-track{flex:1;overflow:hidden;position:relative;height:100%}
-#ticker-inner{position:absolute;white-space:nowrap;font-family:var(--font-mono);font-size:10px;color:#888;top:50%;transform:translateY(-50%);animation:ticker-scroll 60s linear infinite}
-#ticker-inner:hover{animation-play-state:paused}
-@keyframes ticker-scroll{0%{left:100%}100%{left:-200%}}
+#ticker-inner{position:absolute;white-space:nowrap;font-family:var(--font-mono);font-size:10px;color:#888;top:50%;transform:translateY(-50%);will-change:transform}
+#ticker-inner:hover{--ticker-paused:1}
 .tk-gold{color:var(--v-gold)}
 .tk-green{color:var(--v-green)}
 .tk-red{color:var(--v-red)}
@@ -2060,6 +2059,40 @@ function toggleBattleHistory(){
 }
 
 // ── TOP MOVERS BANNER ─────────────────────────────────────────────────────────
+// ── TICKER ───────────────────────────────────────────────────────────────────
+let _tickerX=null, _tickerRaf=null, _tickerPaused=false;
+
+function startTicker(){
+  const track=document.getElementById('ticker-track');
+  const inner=document.getElementById('ticker-inner');
+  if(!track||!inner||!inner.innerHTML) return;
+
+  // Duplicate content for seamless loop
+  inner.innerHTML=inner.innerHTML+inner.innerHTML;
+
+  const trackW=track.offsetWidth;
+  const contentW=inner.scrollWidth/2; // half because we duplicated
+  const speed=80; // pixels per second
+  if(_tickerX===null) _tickerX=trackW;
+
+  let last=null;
+  function tick(ts){
+    if(last===null) last=ts;
+    const dt=(ts-last)/1000;
+    last=ts;
+    if(!_tickerPaused) _tickerX-=speed*dt;
+    // Seamless reset: when first copy scrolled off, jump back
+    if(_tickerX<=-contentW) _tickerX+=contentW;
+    inner.style.left=_tickerX+'px';
+    _tickerRaf=requestAnimationFrame(tick);
+  }
+  if(_tickerRaf) cancelAnimationFrame(_tickerRaf);
+  _tickerRaf=requestAnimationFrame(tick);
+
+  inner.addEventListener('mouseenter',()=>{_tickerPaused=true;});
+  inner.addEventListener('mouseleave',()=>{_tickerPaused=false;});
+}
+
 function renderTopMovers(){
   if(!battleHistoryData) return;
   const {playerChanges, changedTiles}=battleHistoryData;
@@ -2067,41 +2100,60 @@ function renderTopMovers(){
   const gainers=rows.filter(r=>r.net>0).sort((a,b)=>b.net-a.net).slice(0,3);
   const losers=rows.filter(r=>r.net<0).sort((a,b)=>a.net-b.net).slice(0,3);
   const topPlayer=players[0];
-  const top10pct=players.length?((players.slice(0,10).reduce((s,p)=>s+p.tiles,0)/totalTiles*100).toFixed(1)):0;
+  const top10tiles=players.slice(0,10).reduce((s,p)=>s+p.tiles,0);
+  const top10pct=totalTiles?(top10tiles/totalTiles*100).toFixed(1):0;
   const battles=changedTiles.filter(c=>c.type==='captured').length;
   const myPlayer=players.find(p=>MY_IDS.has(p.pid));
+  const myRank=myPlayer?players.indexOf(myPlayer)+1:null;
 
-  // Flavour phrases
-  const flavour=[
-    battles>50?`🔫 <span class="tk-red">${battles} turfs</span> changed hands in the last 24h — the streets are hot`:
-    battles>10?`⚔ <span class="tk-gold">${battles} battles</span> fought in the last 24h`:
-    `😴 Only <span class="tk-gold">${battles} skirmishes</span> in the last 24h — quiet night`,
-    topPlayer?`👑 <span class="tk-gold">${esc(topPlayer.name||'Unknown')}</span> leads with <span class="tk-green">${topPlayer.tiles.toLocaleString('en')}</span> turfs`:null,
-    `🗺 <span class="tk-blue">${totalTiles.toLocaleString('en')}</span> turfs claimed by <span class="tk-blue">${players.length.toLocaleString('en')}</span> players`,
+  // Most garrisoned player
+  const garMap=new Map();
+  for(const t of tiles){
+    const gc=(t.gH||0)+(t.gB||0)+(t.gE||0);
+    if(gc>0) garMap.set(t.pid,(garMap.get(t.pid)||0)+gc);
+  }
+  let mostGarPid=null,mostGarCount=0;
+  for(const [pid,cnt] of garMap){if(cnt>mostGarCount){mostGarCount=cnt;mostGarPid=pid;}}
+  const mostGarPlayer=mostGarPid?players.find(p=>p.pid===mostGarPid):null;
+
+  // Active players in 24h
+  const activePids=new Set([...playerChanges.keys()]);
+
+  const sep='<span class="tk-sep">◆</span>';
+
+  const items=[
+    // Map stats
+    `🗺 <span class="tk-blue">${totalTiles.toLocaleString('en')}</span> turfs claimed · <span class="tk-blue">${players.length.toLocaleString('en')}</span> players on the map`,
+    // Battle intensity
+    battles>50?`🔫 <span class="tk-red">${battles} turfs</span> changed hands in 24h — the streets are hot`:
+    battles>10?`⚔ <span class="tk-gold">${battles} turf battles</span> fought in the last 24h`:
+    `😴 Only <span class="tk-gold">${battles} skirmishes</span> in 24h — quiet night`,
+    // Top player
+    topPlayer?`👑 <span class="tk-gold">${esc(topPlayer.name||'Unknown')}</span> leads the city with <span class="tk-green">${topPlayer.tiles.toLocaleString('en')}</span> turfs`:null,
+    // Top 10 dominance
     top10pct?`💰 Top 10 players control <span class="tk-gold">${top10pct}%</span> of all territory`:null,
-    myPlayer?`🛡 <span class="tk-gold">${esc(myPlayer.name)}</span> holds <span class="tk-green">${myPlayer.tiles.toLocaleString('en')}</span> turfs`:null,
+    // Active players
+    activePids.size?`📊 <span class="tk-green">${activePids.size}</span> players made moves in the last 24h`:null,
+    // Most garrisoned
+    mostGarPlayer&&mostGarCount>0?`🛡 <span class="tk-gold">${esc(mostGarPlayer.name||'Unknown')}</span> has the heaviest garrison — <span class="tk-blue">${mostGarCount}</span> total defenders deployed`:null,
+    // Own stats
+    myPlayer&&myRank?`🏠 <span class="tk-gold">${esc(myPlayer.name)}</span> — rank <span class="tk-green">#${myRank}</span> · ${myPlayer.tiles.toLocaleString('en')} turfs`:null,
+    // Gainers
+    gainers.length?`📈 24h gainers: `+gainers.map(r=>`<span class="tk-green">▲ ${esc(r.name||'?')} +${r.net}</span>`).join(' · '):null,
+    // Losers
+    losers.length?`📉 24h losers: `+losers.map(r=>`<span class="tk-red">▼ ${esc(r.name||'?')} ${r.net}</span>`).join(' · '):null,
+    // Unclaimed
+    `🏚 <span class="tk-blue">${(20668-totalTiles).toLocaleString('en')}</span> turfs still unclaimed — up for grabs`,
   ].filter(Boolean);
 
-  // Top movers items
-  const moverItems=[];
-  if(gainers.length){
-    moverItems.push(`📈 24h gainers: `+gainers.map(r=>`<span class="tk-green">▲ ${esc(r.name||'?')} +${r.net}</span>`).join(' · '));
-  }
-  if(losers.length){
-    moverItems.push(`📉 24h losers: `+losers.map(r=>`<span class="tk-red">▼ ${esc(r.name||'?')} ${r.net}</span>`).join(' · '));
-  }
-
-  // Combine all items with separators
-  const all=[...flavour,...moverItems];
-  const sep='<span class="tk-sep">◆</span>';
-  document.getElementById('ticker-inner').innerHTML=all.join(sep)+sep;
-
-  // Adjust animation duration based on content length
-  const len=document.getElementById('ticker-inner').textContent.length;
-  const dur=Math.max(30,len*0.4);
-  document.getElementById('ticker-inner').style.animationDuration=`${dur}s`;
-
+  const inner=document.getElementById('ticker-inner');
+  inner.innerHTML=items.join(sep)+sep;
   document.getElementById('ticker-bar').classList.add('visible');
+
+  // Reset and start JS ticker
+  _tickerX=null;
+  if(_tickerRaf) cancelAnimationFrame(_tickerRaf);
+  setTimeout(startTicker, 50); // wait for DOM paint
 }
 
 // ── GARRISON MODAL ────────────────────────────────────────────────────────────
