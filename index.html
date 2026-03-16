@@ -199,15 +199,19 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
   button{padding:6px 10px;font-size:12px}
 }
 
-/* ── TOP MOVERS BANNER ── */
-#top-movers-bar{display:none;align-items:center;gap:10px;padding:5px 14px;background:#0a0a00;border-bottom:2px solid #3a2a00;flex-shrink:0;font-family:var(--font-mono);font-size:10px;flex-wrap:wrap}
-#top-movers-bar.visible{display:flex}
-#top-movers-bar .tm-label{color:var(--v-gold);font-weight:700;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
-#top-movers-bar .tm-gainer{color:var(--v-green);white-space:nowrap}
-#top-movers-bar .tm-loser{color:var(--v-red);white-space:nowrap}
-#top-movers-bar .tm-sep{color:#444;margin:0 4px}
-#top-movers-close{background:transparent;border:none;color:#555;cursor:pointer;font-size:14px;padding:0;line-height:1;margin-left:auto;box-shadow:none;flex-shrink:0}
-#top-movers-close:hover{color:#ccc;background:transparent}
+/* ── TICKER ── */
+#ticker-bar{display:none;align-items:center;background:#050500;border-bottom:2px solid #2a2000;flex-shrink:0;overflow:hidden;height:26px}
+#ticker-bar.visible{display:flex}
+#ticker-label{font-family:var(--font-bangers);font-size:13px;color:var(--v-gold);letter-spacing:1px;padding:0 10px;white-space:nowrap;flex-shrink:0;border-right:2px solid #2a2000;height:100%;display:flex;align-items:center}
+#ticker-track{flex:1;overflow:hidden;position:relative;height:100%}
+#ticker-inner{position:absolute;white-space:nowrap;font-family:var(--font-mono);font-size:10px;color:#888;top:50%;transform:translateY(-50%);animation:ticker-scroll 60s linear infinite}
+#ticker-inner:hover{animation-play-state:paused}
+@keyframes ticker-scroll{0%{left:100%}100%{left:-200%}}
+.tk-gold{color:var(--v-gold)}
+.tk-green{color:var(--v-green)}
+.tk-red{color:var(--v-red)}
+.tk-blue{color:#89c6ff}
+.tk-sep{color:#333;margin:0 16px}
 
 /* ── GARRISON IN TIP ── */
 #tip .tgar,#touch-tooltip .tgar{color:#89c6ff;font-size:10px}
@@ -349,13 +353,12 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
   <span id="status">Loading...</span>
 </div>
 
-<!-- Top movers banner -->
-<div id="top-movers-bar">
-  <span class="tm-label">📈 24h top movers</span>
-  <span id="tm-gainers"></span>
-  <span class="tm-sep">|</span>
-  <span id="tm-losers"></span>
-  <button id="top-movers-close" onclick="document.getElementById('top-movers-bar').classList.remove('visible')" title="Dismiss">✕</button>
+<!-- Ticker -->
+<div id="ticker-bar">
+  <div id="ticker-label">📡 LIVE</div>
+  <div id="ticker-track">
+    <div id="ticker-inner"></div>
+  </div>
 </div>
 
 <!-- Timeline bar -->
@@ -2059,16 +2062,46 @@ function toggleBattleHistory(){
 // ── TOP MOVERS BANNER ─────────────────────────────────────────────────────────
 function renderTopMovers(){
   if(!battleHistoryData) return;
-  const {playerChanges}=battleHistoryData;
+  const {playerChanges, changedTiles}=battleHistoryData;
   const rows=[...playerChanges.entries()].map(([pid,c])=>({pid,...c,net:c.gained-c.lost}));
   const gainers=rows.filter(r=>r.net>0).sort((a,b)=>b.net-a.net).slice(0,3);
   const losers=rows.filter(r=>r.net<0).sort((a,b)=>a.net-b.net).slice(0,3);
-  if(!gainers.length&&!losers.length) return;
-  const gEl=document.getElementById('tm-gainers');
-  const lEl=document.getElementById('tm-losers');
-  gEl.innerHTML=gainers.map(r=>`<span class="tm-gainer">▲ ${esc(r.name||'?')} +${r.net}</span>`).join('<span class="tm-sep"> · </span>');
-  lEl.innerHTML=losers.map(r=>`<span class="tm-loser">▼ ${esc(r.name||'?')} ${r.net}</span>`).join('<span class="tm-sep"> · </span>');
-  document.getElementById('top-movers-bar').classList.add('visible');
+  const topPlayer=players[0];
+  const top10pct=players.length?((players.slice(0,10).reduce((s,p)=>s+p.tiles,0)/totalTiles*100).toFixed(1)):0;
+  const battles=changedTiles.filter(c=>c.type==='captured').length;
+  const myPlayer=players.find(p=>MY_IDS.has(p.pid));
+
+  // Flavour phrases
+  const flavour=[
+    battles>50?`🔫 <span class="tk-red">${battles} turfs</span> changed hands in the last 24h — the streets are hot`:
+    battles>10?`⚔ <span class="tk-gold">${battles} battles</span> fought in the last 24h`:
+    `😴 Only <span class="tk-gold">${battles} skirmishes</span> in the last 24h — quiet night`,
+    topPlayer?`👑 <span class="tk-gold">${esc(topPlayer.name||'Unknown')}</span> leads with <span class="tk-green">${topPlayer.tiles.toLocaleString('en')}</span> turfs`:null,
+    `🗺 <span class="tk-blue">${totalTiles.toLocaleString('en')}</span> turfs claimed by <span class="tk-blue">${players.length.toLocaleString('en')}</span> players`,
+    top10pct?`💰 Top 10 players control <span class="tk-gold">${top10pct}%</span> of all territory`:null,
+    myPlayer?`🛡 <span class="tk-gold">${esc(myPlayer.name)}</span> holds <span class="tk-green">${myPlayer.tiles.toLocaleString('en')}</span> turfs`:null,
+  ].filter(Boolean);
+
+  // Top movers items
+  const moverItems=[];
+  if(gainers.length){
+    moverItems.push(`📈 24h gainers: `+gainers.map(r=>`<span class="tk-green">▲ ${esc(r.name||'?')} +${r.net}</span>`).join(' · '));
+  }
+  if(losers.length){
+    moverItems.push(`📉 24h losers: `+losers.map(r=>`<span class="tk-red">▼ ${esc(r.name||'?')} ${r.net}</span>`).join(' · '));
+  }
+
+  // Combine all items with separators
+  const all=[...flavour,...moverItems];
+  const sep='<span class="tk-sep">◆</span>';
+  document.getElementById('ticker-inner').innerHTML=all.join(sep)+sep;
+
+  // Adjust animation duration based on content length
+  const len=document.getElementById('ticker-inner').textContent.length;
+  const dur=Math.max(30,len*0.4);
+  document.getElementById('ticker-inner').style.animationDuration=`${dur}s`;
+
+  document.getElementById('ticker-bar').classList.add('visible');
 }
 
 // ── GARRISON MODAL ────────────────────────────────────────────────────────────
