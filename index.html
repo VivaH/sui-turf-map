@@ -2082,6 +2082,8 @@ function closeTicker(){
   _tickerRaf=null;
   document.getElementById('ticker-bar').classList.remove('visible');
 }
+
+function startTicker(){
   const track=document.getElementById('ticker-track');
   const inner=document.getElementById('ticker-inner');
   if(!track||!inner||!inner.innerHTML) return;
