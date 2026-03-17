@@ -264,6 +264,12 @@ for t in raw_tiles:
     if t.get("oid"): entry["oid"] = t["oid"]  # object ID for garrison recall
     compact_tiles.append(entry)
 
+# Build HQ register: {tile_oid: owner_pid} for all HQ tiles
+hq_register = {}
+for t in raw_tiles:
+    if t["hq"] and t.get("oid"):
+        hq_register[t["oid"]] = t["pid"]
+
 now_utc = datetime.now(timezone.utc)
 output = {
     "generated":   now_utc.isoformat(),
@@ -271,6 +277,7 @@ output = {
     "unclaimed":   unclaimed,
     "players":     player_list,
     "tiles":       compact_tiles,
+    "hq_register": hq_register,
 }
 
 
@@ -330,6 +337,64 @@ for p in player_list:
         p["lcd"] = lcd  # days since last turf count change
 
 print(f"  Done — {sum(1 for p in player_list if 'lcd' in p)} players with change data")
+
+# ── HQ CAPTURE TRACKING ───────────────────────────────────────────────────────
+# Compare current HQ register against previous snapshots to detect captured HQs.
+# Stores hq_captures.json: list of {oid, prev_pid, new_pid, timestamp}
+print("Computing HQ captures...")
+HQ_CAPTURES_FILE = "hq_captures.json"
+try:
+    existing_captures = json.loads(open(HQ_CAPTURES_FILE, encoding="utf-8").read())
+except Exception:
+    existing_captures = []
+
+# Load previous snapshot's HQ register (most recent before current)
+prev_hq_register = {}
+if all_snaps_sorted[1:]:
+    try:
+        prev_data = json.loads(open(all_snaps_sorted[1], encoding="utf-8").read())
+        prev_hq_register = prev_data.get("hq_register", {})
+    except Exception:
+        pass
+
+# Detect changes: same OID, different owner
+new_captures = []
+pid_to_name = {p["pid"]: p.get("name","") for p in player_list}
+# Also build from prev snapshot players
+try:
+    prev_players = {p["pid"]: p.get("name","") for p in prev_data.get("players",[])}
+except Exception:
+    prev_players = {}
+
+for oid, new_owner in hq_register.items():
+    prev_owner = prev_hq_register.get(oid)
+    if prev_owner and prev_owner != new_owner:
+        new_captures.append({
+            "oid":       oid,
+            "prev_pid":  prev_owner,
+            "prev_name": prev_players.get(prev_owner, ""),
+            "new_pid":   new_owner,
+            "new_name":  pid_to_name.get(new_owner, ""),
+            "timestamp": now_utc.isoformat(),
+        })
+
+if new_captures:
+    print(f"  {len(new_captures)} new HQ captures detected!")
+
+# Merge with existing, keep last 500, deduplicate by oid+timestamp
+all_captures = existing_captures + new_captures
+seen = set()
+deduped = []
+for c in reversed(all_captures):
+    key = f"{c['oid']}_{c['timestamp']}"
+    if key not in seen:
+        seen.add(key)
+        deduped.append(c)
+deduped = list(reversed(deduped))[-500:]
+
+with open(HQ_CAPTURES_FILE, "w", encoding="utf-8") as f:
+    json.dump(deduped, f, separators=(",", ":"), ensure_ascii=False)
+print(f"  hq_captures.json updated ({len(deduped)} total captures)")
 
 output_json = json.dumps(output, separators=(",", ":"), ensure_ascii=False)
 size_kb = len(output_json) / 1024

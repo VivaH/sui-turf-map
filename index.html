@@ -633,7 +633,10 @@ function status(s){document.getElementById('status').textContent=s;}
 async function loadHistory(){
   try{
     const r=await fetch('history.json?t='+Date.now());
-    if(!r.ok) return;
+    if(!r.ok){
+      status('⚠ Could not load history.json (HTTP '+r.status+'). Timeline unavailable.');
+      return;
+    }
     const h=await r.json();
     snapshots=h.snapshots||[];
     if(snapshots.length>1){
@@ -647,10 +650,11 @@ async function loadHistory(){
       document.getElementById('gifBtn').style.display='';
       document.getElementById('battle-btn').style.display='';
       updateTimelineLabel(0);
-      // Compute top movers + battle history in background
       setTimeout(()=>{ loadBattleHistory(); }, 200);
     }
-  }catch(e){}
+  }catch(e){
+    status('⚠ Failed to load history: '+e.message);
+  }
 }
 
 function updateTimelineLabel(idx){
@@ -703,7 +707,7 @@ async function loadData(url){
 
   try{
     const resp=await fetch(url+'?t='+Date.now());
-    if(!resp.ok) throw new Error('File not found (HTTP '+resp.status+')');
+    if(!resp.ok) throw new Error(`HTTP ${resp.status} — could not load ${url}`);
     const d=await resp.json();
 
     const gen=new Date(d.generated);
@@ -746,8 +750,10 @@ async function loadData(url){
       status(`${players.length} players · ${tiles.length} turfs`);
     }
   }catch(e){
-    status('Error: '+e.message);
+    status('⚠ '+e.message);
     document.getElementById('age').textContent='';
+    tiles=[];tileMap.clear();players=[];filteredPlayers=[];
+    renderPlayerList();drawMap();drawMinimap();
   }
 }
 
@@ -1423,7 +1429,7 @@ function updateStats(){
   document.getElementById('s-tiles').textContent=totalTiles.toLocaleString('en');
 }
 let filterTimer=null;
-function filterPlayers(){clearTimeout(filterTimer);filterTimer=setTimeout(_fp,100);}
+function filterPlayers(){clearTimeout(filterTimer);filterTimer=setTimeout(_fp,250);}
 function setFilter(f,btn){activeFilter=f;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));btn.classList.add('on');filterPlayers();}
 function _fp(){
   const q=document.getElementById('search').value.toLowerCase();
@@ -2050,6 +2056,11 @@ async function loadBattleHistory(){
       }
     }
     battleHistoryData={changedTiles,playerChanges,pidInfo,fromLabel:oldest.label,toLabel:newest.label};
+    // Load HQ captures
+    try{
+      const hqr=await fetch('hq_captures.json?t='+Date.now());
+      if(hqr.ok) battleHistoryData.hqCaptures=await hqr.json();
+    }catch(e){}
     renderTopMovers();
   }catch(e){console.warn('Battle history error:',e);}
 }
@@ -2122,6 +2133,16 @@ function renderTopMovers(){
   // Active players in 24h
   const activePids=new Set([...playerChanges.keys()]);
 
+  // HQ captures
+  const hqCaptures=battleHistoryData.hqCaptures||[];
+  const hqCapCount=new Map();
+  for(const c of hqCaptures) hqCapCount.set(c.new_pid,(hqCapCount.get(c.new_pid)||0)+1);
+  let topHqPid=null,topHqCount=0;
+  for(const [pid,cnt] of hqCapCount){if(cnt>topHqCount){topHqCount=cnt;topHqPid=pid;}}
+  const topHqPlayer=topHqPid?players.find(p=>p.pid===topHqPid):null;
+  const recentHq=hqCaptures.length>0?hqCaptures[hqCaptures.length-1]:null;
+  const recentHqAge=recentHq?Math.round((Date.now()-new Date(recentHq.timestamp))/3600000):null;
+
   const sep='<span class="tk-sep">◆</span>';
 
   const items=[
@@ -2141,12 +2162,14 @@ function renderTopMovers(){
     mostGarPlayer&&mostGarCount>0?`🛡 <span class="tk-gold">${esc(mostGarPlayer.name||'Unknown')}</span> has the heaviest garrison — <span class="tk-blue">${mostGarCount}</span> total defenders deployed`:null,
     // Own stats
     myPlayer&&myRank?`🏠 <span class="tk-gold">${esc(myPlayer.name)}</span> — rank <span class="tk-green">#${myRank}</span> · ${myPlayer.tiles.toLocaleString('en')} turfs`:null,
+    // Most HQ captures all-time
+    topHqPlayer&&topHqCount>0?`💀 <span class="tk-gold">${esc(topHqPlayer.name||'Unknown')}</span> has captured the most HQs — <span class="tk-red">${topHqCount}</span> total`:null,
+    // Most recent HQ capture
+    recentHq&&recentHqAge!==null?`🏴 <span class="tk-red">${esc(recentHq.prev_name||'Unknown')}</span>'s HQ was captured by <span class="tk-gold">${esc(recentHq.new_name||'Unknown')}</span> ${recentHqAge<1?'just now':recentHqAge+'h ago'}`:null,
     // Gainers
     gainers.length?`📈 24h gainers: `+gainers.map(r=>`<span class="tk-green">▲ ${esc(r.name||'?')} +${r.net}</span>`).join(' · '):null,
     // Losers
     losers.length?`📉 24h losers: `+losers.map(r=>`<span class="tk-red">▼ ${esc(r.name||'?')} ${r.net}</span>`).join(' · '):null,
-    // Unclaimed
-    `🏚 <span class="tk-blue">${(20668-totalTiles).toLocaleString('en')}</span> turfs still unclaimed — up for grabs`,
   ].filter(Boolean);
 
   const inner=document.getElementById('ticker-inner');
@@ -2422,20 +2445,23 @@ async function executeRecall(){
 
 async function loadSuiSdk(){
   if(window.__suiSdk) return;
-  try{
-    // ESM dynamic import via esm.sh — @mysten/sui has no UMD build
-    const [txMod, clientMod] = await Promise.all([
-      import('https://esm.sh/@mysten/sui@1.21.2/transactions'),
-      import('https://esm.sh/@mysten/sui@1.21.2/client'),
-    ]);
-    window.__suiSdk = {
-      Transaction: txMod.Transaction,
-      SuiClient: clientMod.SuiClient,
-      getFullnodeUrl: clientMod.getFullnodeUrl,
-    };
-  }catch(e){
-    throw new Error('Failed to load SUI SDK from esm.sh: '+(e?.message||e));
+  // Try local cached SDK first — eliminates esm.sh dependency
+  // To enable: download sui-sdk.js (see README) and commit to repo root
+  const localSources=[
+    ['./sui-sdk-tx.js','./sui-sdk-client.js'], // local cache
+  ];
+  const remoteSources=[
+    ['https://esm.sh/@mysten/sui@1.21.2/transactions','https://esm.sh/@mysten/sui@1.21.2/client'],
+  ];
+  for(const [txSrc,clientSrc] of [...localSources,...remoteSources]){
+    try{
+      const [txMod,clientMod]=await Promise.all([import(txSrc),import(clientSrc)]);
+      if(!txMod?.Transaction) continue;
+      window.__suiSdk={Transaction:txMod.Transaction,SuiClient:clientMod.SuiClient,getFullnodeUrl:clientMod.getFullnodeUrl};
+      return;
+    }catch(e){ /* try next source */ }
   }
+  throw new Error('Failed to load SUI SDK from all sources. Check your connection.');
 }
 
 async function buildAndSignTx(calls, dvdId, profileId, hqOid){
