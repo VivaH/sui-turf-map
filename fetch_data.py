@@ -354,8 +354,13 @@ if all_snaps_sorted:
     try:
         prev_data = json.loads(open(all_snaps_sorted[0], encoding="utf-8").read())
         prev_hq_register = prev_data.get("hq_register", {})
-    except Exception:
-        pass
+        print(f"  Previous snapshot: {os.path.basename(all_snaps_sorted[0])} — {len(prev_hq_register)} HQ entries")
+    except Exception as e:
+        print(f"  Could not load previous snapshot: {e}")
+else:
+    print("  No previous snapshots found")
+
+print(f"  Current HQ register: {len(hq_register)} entries")
 
 # Detect changes: same OID, different owner
 new_captures = []
