@@ -348,11 +348,11 @@ try:
 except Exception:
     existing_captures = []
 
-# Load previous snapshot's HQ register (most recent before current)
+# Load previous snapshot's HQ register (most recent = index 0, since new snapshot not yet written)
 prev_hq_register = {}
-if all_snaps_sorted[1:]:
+if all_snaps_sorted:
     try:
-        prev_data = json.loads(open(all_snaps_sorted[1], encoding="utf-8").read())
+        prev_data = json.loads(open(all_snaps_sorted[0], encoding="utf-8").read())
         prev_hq_register = prev_data.get("hq_register", {})
     except Exception:
         pass
