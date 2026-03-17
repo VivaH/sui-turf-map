@@ -383,6 +383,12 @@ for oid, new_owner in hq_register.items():
             "timestamp": now_utc.isoformat(),
         })
 
+# Debug: show a sample comparison to verify matching
+sample = list(hq_register.items())[:3]
+for oid, new_owner in sample:
+    prev_owner = prev_hq_register.get(oid, "NOT FOUND")
+    print(f"  Sample OID {oid[:16]}... prev={prev_owner[:16] if prev_owner != 'NOT FOUND' else 'NOT FOUND'} new={new_owner[:16]}")
+
 if new_captures:
     print(f"  {len(new_captures)} new HQ captures detected!")
 
