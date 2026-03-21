@@ -201,6 +201,30 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
   #report-print-frame svg{max-width:100%;height:auto;page-break-inside:avoid}
 }
 
+/* ── PROFILE MODAL ── */
+#profile-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:300;align-items:center;justify-content:center}
+#profile-modal.open{display:flex}
+#profile-box{background:#111;border:2px solid #555;border-radius:0;padding:24px;width:420px;max-width:92vw;box-shadow:6px 6px 0 #000}
+#profile-box h2{font-family:var(--font-bangers);font-size:18px;font-weight:400;letter-spacing:1.5px;margin-bottom:6px;color:#fff;text-transform:uppercase}
+#profile-box p{font-size:11px;color:#666;margin-bottom:12px;line-height:1.7;font-family:var(--font-mono)}
+#profile-search{width:100%;background:#0a0a0a;color:#ccc;border:2px solid #333;border-radius:0;padding:6px 10px;font-size:11px;margin-bottom:6px;font-family:var(--font-mono)}
+#profile-search:focus{outline:none;border-color:var(--v-gold)}
+#profile-search::placeholder{color:#333}
+#profile-results{max-height:160px;overflow-y:auto;border:1px solid #222;margin-bottom:12px;display:none}
+#profile-results::-webkit-scrollbar{width:3px}
+#profile-results::-webkit-scrollbar-thumb{background:#444}
+.profile-result-row{padding:6px 10px;font-size:11px;font-family:var(--font-mono);cursor:pointer;border-bottom:1px solid #1a1a1a;display:flex;align-items:center;gap:8px}
+.profile-result-row:hover{background:#1a1a1a}
+.profile-result-row .pr-name{color:#aaa;flex:1}
+.profile-result-row .pr-tiles{color:#444;font-size:10px}
+#profile-current{margin-bottom:14px}
+.profile-entry{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:11px;font-family:var(--font-mono)}
+.profile-entry-name{flex:1;color:#FAC775}
+.profile-entry-pid{color:#444;font-size:9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px}
+.profile-entry-remove{background:transparent;border:1px solid #333;color:#555;font-size:10px;padding:1px 6px;cursor:pointer;box-shadow:none;border-radius:0}
+.profile-entry-remove:hover{border-color:#ff8483;color:#ff8483;background:transparent;box-shadow:none}
+#profile-empty{color:#444;font-size:11px;font-family:var(--font-mono);padding:4px 0}
+
 /* ── REFRESH MODAL ── */
 #refresh-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:300;align-items:center;justify-content:center}
 #refresh-modal.open{display:flex}
@@ -413,6 +437,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 <div id="toolbar-scroll">
   <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.1</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
+  <button onclick="openProfileModal()" title="My profiles" style="border-color:#555;color:#aaa">⚙ My Profile</button>
   <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh data</button>
   <div class="sep"></div>
   <button id="route-btn" onclick="toggleRouteMode()">🗺 Route</button>
@@ -617,6 +642,20 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
   </div>
 </div>
 
+<!-- Profile settings modal -->
+<div id="profile-modal">
+  <div id="profile-box">
+    <h2>⚙ My Profile</h2>
+    <p>Add your player profile(s) to highlight your turfs on the map. Search by name or paste your profile ID directly.</p>
+    <input id="profile-search" type="text" placeholder="Search player name or paste profile ID (0x...)..." oninput="onProfileSearch(this.value)">
+    <div id="profile-results"></div>
+    <div id="profile-current"></div>
+    <div class="modal-btns">
+      <button onclick="closeProfileModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Wallet / Recall modal -->
 <div id="wallet-modal">
   <div id="wallet-box">
@@ -727,7 +766,11 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
   // Fire app-ready so Slush content script registers itself
   window.dispatchEvent(new CustomEvent('wallet-standard:app-ready',{detail:{register}}));
 })();
-const MY_IDS=new Set(['0x857e8e7fc94d43f327bb24388439d0fdcc112a9e5e25264969b27011a233d2f0','0xdb2b57ea07dae7acd91d56f4c5e20a077313abb50a9924f84529ef67030ab273']);
+// ── MY PROFILES (configurable, stored in localStorage) ────────────────────────
+const MY_IDS_KEY = 'vwm_my_profiles'; // {pid: name}
+function loadMyProfiles(){ try{ return JSON.parse(localStorage.getItem(MY_IDS_KEY)||'{}'); }catch(e){ return {}; } }
+function saveMyProfiles(obj){ try{ localStorage.setItem(MY_IDS_KEY, JSON.stringify(obj)); }catch(e){} }
+let MY_IDS = new Set(Object.keys(loadMyProfiles()));
 const CELL=12;
 const DIRS8=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
 
@@ -3211,6 +3254,90 @@ function closeReport(){
 document.getElementById('report-modal').addEventListener('click', e=>{
   if(e.target === document.getElementById('report-modal')) closeReport();
 });
+
+// ── PROFILE MODAL ─────────────────────────────────────────────────────────────
+function openProfileModal(){
+  renderProfileCurrent();
+  document.getElementById('profile-search').value='';
+  document.getElementById('profile-results').style.display='none';
+  document.getElementById('profile-results').innerHTML='';
+  document.getElementById('profile-modal').classList.add('open');
+}
+function closeProfileModal(){
+  document.getElementById('profile-modal').classList.remove('open');
+}
+document.getElementById('profile-modal').addEventListener('click',e=>{
+  if(e.target===document.getElementById('profile-modal')) closeProfileModal();
+});
+
+function renderProfileCurrent(){
+  const profiles = loadMyProfiles();
+  const el = document.getElementById('profile-current');
+  const pids = Object.keys(profiles);
+  if(!pids.length){
+    el.innerHTML='<div id="profile-empty">No profiles set — search for your name above.</div>';
+    return;
+  }
+  el.innerHTML = pids.map(pid=>{
+    const name = profiles[pid] || pid.slice(0,16)+'...';
+    return `<div class="profile-entry">
+      <span class="profile-entry-name">${esc(name)}</span>
+      <span class="profile-entry-pid">${pid.slice(0,20)}...</span>
+      <button class="profile-entry-remove" onclick="removeProfile('${pid}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function addProfile(pid, name){
+  const profiles = loadMyProfiles();
+  profiles[pid] = name;
+  saveMyProfiles(profiles);
+  MY_IDS = new Set(Object.keys(profiles));
+  // Reapply isMe flag on tiles and players
+  for(const t of tiles) t.isMe = MY_IDS.has(t.pid);
+  renderProfileCurrent();
+  filterPlayers();
+  drawMap(); drawMinimap();
+}
+
+function removeProfile(pid){
+  const profiles = loadMyProfiles();
+  delete profiles[pid];
+  saveMyProfiles(profiles);
+  MY_IDS = new Set(Object.keys(profiles));
+  for(const t of tiles) t.isMe = MY_IDS.has(t.pid);
+  renderProfileCurrent();
+  filterPlayers();
+  drawMap(); drawMinimap();
+}
+
+function onProfileSearch(val){
+  const resultsEl = document.getElementById('profile-results');
+  val = val.trim();
+  if(!val){ resultsEl.style.display='none'; resultsEl.innerHTML=''; return; }
+
+  // Direct PID paste
+  if(val.startsWith('0x') && val.length >= 20){
+    const match = players.find(p=>p.pid===val);
+    const name = match ? match.name : '';
+    resultsEl.style.display='block';
+    resultsEl.innerHTML=`<div class="profile-result-row" onclick="addProfile('${val}','${esc(name||val.slice(0,12))}');document.getElementById('profile-search').value='';document.getElementById('profile-results').style.display='none'">
+      <span class="profile-result-name">${esc(name||'[unknown]')}</span>
+      <span class="profile-result-pid" style="font-size:9px;color:#444">${val.slice(0,20)}...</span>
+    </div>`;
+    return;
+  }
+
+  // Name search
+  const q = val.toLowerCase();
+  const matches = players.filter(p=>p.name&&p.name.toLowerCase().includes(q)).slice(0,8);
+  if(!matches.length){ resultsEl.style.display='block'; resultsEl.innerHTML='<div style="padding:6px 10px;font-size:11px;color:#444;font-family:var(--font-mono)">No players found</div>'; return; }
+  resultsEl.style.display='block';
+  resultsEl.innerHTML = matches.map(p=>`<div class="profile-result-row" onclick="addProfile('${p.pid}','${esc(p.name)}');document.getElementById('profile-search').value='';document.getElementById('profile-results').style.display='none';renderProfileCurrent()">
+    <span class="pr-name">${esc(p.name)}</span>
+    <span class="pr-tiles">${p.tiles} turfs</span>
+  </div>`).join('');
+}
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 resizeCanvas();

@@ -225,10 +225,7 @@ print(f"  Tiles: {len(raw_tiles)} occupied, {unclaimed} unclaimed")
 # ── BUILD OUTPUT ───────────────────────────────────────────────────────────────
 print("Building output...")
 
-MY_IDS = {
-    "0x857e8e7fc94d43f327bb24388439d0fdcc112a9e5e25264969b27011a233d2f0",
-    "0xdb2b57ea07dae7acd91d56f4c5e20a077313abb50a9924f84529ef67030ab273",
-}
+MY_IDS = set()  # Determined client-side per user via localStorage
 
 def pid_color(pid, tile_count=0):
     h = 0
