@@ -208,6 +208,158 @@ if not article_html.strip():
 
 print("Article generated successfully.")
 
+# ── SVG CHARTS ────────────────────────────────────────────────────────────────
+def esc_svg(s):
+    return str(s).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
+
+def svg_bar_chart(title, items, color_pos='#c8a84a', color_neg='#8b1a1a', width=640):
+    """Horizontal bar chart for gainers/losers. items = [(name, value), ...]"""
+    if not items:
+        return ''
+    max_val = max(abs(v) for _, v in items)
+    if max_val == 0:
+        return ''
+    BAR_H    = 22
+    GAP      = 6
+    LABEL_W  = 160
+    BAR_MAX  = width - LABEL_W - 80
+    TITLE_H  = 32
+    height   = TITLE_H + len(items) * (BAR_H + GAP) + 20
+
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'style="font-family:Georgia,serif;background:#0a0800;display:block;margin:18px auto">',
+        # Title
+        f'<text x="{width//2}" y="22" text-anchor="middle" '
+        f'fill="#c8a84a" font-size="13" font-weight="bold" letter-spacing="2" '
+        f'font-family="Georgia,serif">{esc_svg(title.upper())}</text>',
+        # Thin gold divider
+        f'<line x1="20" y1="28" x2="{width-20}" y2="28" stroke="#3a2a00" stroke-width="1"/>',
+    ]
+
+    for i, (name, val) in enumerate(items):
+        y      = TITLE_H + i * (BAR_H + GAP)
+        bar_w  = max(2, int(abs(val) / max_val * BAR_MAX))
+        color  = color_pos if val >= 0 else color_neg
+        prefix = '+' if val > 0 else ''
+        # Name label
+        lines.append(
+            f'<text x="{LABEL_W - 6}" y="{y + BAR_H//2 + 5}" text-anchor="end" '
+            f'fill="#a09060" font-size="11" font-family="Georgia,serif">{esc_svg(name[:22])}</text>'
+        )
+        # Bar
+        lines.append(
+            f'<rect x="{LABEL_W}" y="{y + 3}" width="{bar_w}" height="{BAR_H - 6}" fill="{color}" opacity="0.85"/>'
+        )
+        # Value label
+        lines.append(
+            f'<text x="{LABEL_W + bar_w + 6}" y="{y + BAR_H//2 + 5}" '
+            f'fill="{color}" font-size="11" font-family="Georgia,serif">{esc_svg(prefix+str(val))}</text>'
+        )
+
+    lines.append('</svg>')
+    return '\n'.join(lines)
+
+
+def svg_hq_chart(title, items, width=640):
+    """HQ captures per attacker — dot/bubble style row."""
+    if not items:
+        return ''
+    max_val = max(v for _, v in items)
+    if max_val == 0:
+        return ''
+    BAR_H   = 24
+    GAP     = 5
+    LABEL_W = 170
+    BAR_MAX = width - LABEL_W - 60
+    TITLE_H = 36
+    height  = TITLE_H + len(items) * (BAR_H + GAP) + 20
+
+    lines = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'style="font-family:Georgia,serif;background:#0a0800;display:block;margin:18px auto">',
+        f'<text x="{width//2}" y="22" text-anchor="middle" '
+        f'fill="#c8a84a" font-size="13" font-weight="bold" letter-spacing="2" '
+        f'font-family="Georgia,serif">{esc_svg(title.upper())}</text>',
+        f'<line x1="20" y1="30" x2="{width-20}" y2="30" stroke="#3a2a00" stroke-width="1"/>',
+    ]
+
+    for i, (name, val) in enumerate(items):
+        y      = TITLE_H + i * (BAR_H + GAP)
+        bar_w  = max(2, int(val / max_val * BAR_MAX))
+        cx_dot = LABEL_W - 14
+        cy_dot = y + BAR_H // 2
+
+        lines.append(
+            f'<text x="{LABEL_W - 22}" y="{cy_dot + 5}" text-anchor="end" '
+            f'fill="#a09060" font-size="11" font-family="Georgia,serif">{esc_svg(name[:24])}</text>'
+        )
+        # Skull icon substitute — small red diamond
+        lines.append(
+            f'<polygon points="{cx_dot},{cy_dot-5} {cx_dot+5},{cy_dot} '
+            f'{cx_dot},{cy_dot+5} {cx_dot-5},{cy_dot}" fill="#8b1a1a"/>'
+        )
+        # Bar
+        lines.append(
+            f'<rect x="{LABEL_W}" y="{y+5}" width="{bar_w}" height="{BAR_H-10}" '
+            f'fill="#6b1010" opacity="0.9" rx="1"/>'
+        )
+        # Bright end cap
+        lines.append(
+            f'<rect x="{LABEL_W+bar_w-3}" y="{y+5}" width="3" height="{BAR_H-10}" fill="#c03030"/>'
+        )
+        # Count
+        lines.append(
+            f'<text x="{LABEL_W+bar_w+8}" y="{cy_dot+5}" '
+            f'fill="#c04040" font-size="12" font-weight="bold" font-family="Georgia,serif">'
+            f'{esc_svg(val)}✕</text>'
+        )
+
+    lines.append('</svg>')
+    return '\n'.join(lines)
+
+
+# Build charts
+chart_gainers = svg_bar_chart(
+    "Territory Gains This Week",
+    [(c["name"], c["net"]) for c in gainers[:8]],
+    color_pos='#c8a84a'
+)
+chart_losers = svg_bar_chart(
+    "Heaviest Losses This Week",
+    [(c["name"], c["net"]) for c in losers[:8]],
+    color_neg='#8b1a1a'
+)
+chart_hq = svg_hq_chart(
+    "HQ Raids — Top Attackers",
+    top_hq_capturers[:8]
+) if top_hq_capturers else ''
+
+# Inject charts into article HTML at sensible positions:
+# After the first <hr> → gainers chart
+# After the second <hr> → losers chart
+# Before </body> or at end → HQ chart (if captures happened)
+def inject_after_nth(html, tag, n, insertion):
+    pos, count = 0, 0
+    while True:
+        idx = html.find(tag, pos)
+        if idx == -1:
+            break
+        count += 1
+        if count == n:
+            insert_at = idx + len(tag)
+            return html[:insert_at] + '\n' + insertion + '\n' + html[insert_at:]
+        pos = idx + 1
+    # Fallback: append
+    return html + '\n' + insertion
+
+if chart_gainers:
+    article_html = inject_after_nth(article_html, '<hr>', 1, chart_gainers)
+if chart_losers:
+    article_html = inject_after_nth(article_html, '<hr>', 2, chart_losers)
+if chart_hq:
+    article_html = article_html + '\n<hr>\n' + chart_hq
+
 # ── SAVE REPORT ───────────────────────────────────────────────────────────────
 report = {
     "generated":    now_utc.isoformat(),
