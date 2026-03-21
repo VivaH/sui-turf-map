@@ -2149,13 +2149,24 @@ function renderTopMovers(){
 
   // HQ captures
   const hqCaptures=battleHistoryData.hqCaptures||[];
+  // Top capturer (most HQs taken all-time)
   const hqCapCount=new Map();
   for(const c of hqCaptures) hqCapCount.set(c.new_pid,(hqCapCount.get(c.new_pid)||0)+1);
   let topHqPid=null,topHqCount=0;
   for(const [pid,cnt] of hqCapCount){if(cnt>topHqCount){topHqCount=cnt;topHqPid=pid;}}
   const topHqPlayer=topHqPid?players.find(p=>p.pid===topHqPid):null;
-  const recentHq=hqCaptures.length>0?hqCaptures[hqCaptures.length-1]:null;
-  const recentHqAge=recentHq?Math.round((Date.now()-new Date(recentHq.timestamp))/3600000):null;
+  // Most victimized (most HQs lost all-time)
+  const hqLostCount=new Map();
+  for(const c of hqCaptures) hqLostCount.set(c.prev_pid,(hqLostCount.get(c.prev_pid)||0)+1);
+  let topVictimPid=null,topVictimCount=0;
+  for(const [pid,cnt] of hqLostCount){if(cnt>topVictimCount){topVictimCount=cnt;topVictimPid=pid;}}
+  const topVictimName=topVictimPid?(players.find(p=>p.pid===topVictimPid)?.name||hqCaptures.find(c=>c.prev_pid===topVictimPid)?.prev_name||'Unknown'):'';
+  // HQ captures in last 24h
+  const now24=Date.now()-86400000;
+  const hqRecent24=hqCaptures.filter(c=>new Date(c.timestamp).getTime()>=now24);
+  // Last 3 captures for feed (newest first)
+  const recentHqFeed=hqCaptures.slice(-3).reverse();
+  function hqAge(ts){const h=Math.round((Date.now()-new Date(ts))/3600000);return h<1?'just now':h+'h ago';}
 
   const sep='<span class="tk-sep">◆</span>';
 
@@ -2178,8 +2189,12 @@ function renderTopMovers(){
     myPlayer&&myRank?`🏠 <span class="tk-gold">${esc(myPlayer.name)}</span> — rank <span class="tk-green">#${myRank}</span> · ${myPlayer.tiles.toLocaleString('en')} turfs`:null,
     // Most HQ captures all-time
     topHqPlayer&&topHqCount>0?`💀 <span class="tk-gold">${esc(topHqPlayer.name||'Unknown')}</span> has captured the most HQs — <span class="tk-red">${topHqCount}</span> total`:null,
-    // Most recent HQ capture
-    recentHq&&recentHqAge!==null?`🏴 <span class="tk-red">${esc(recentHq.prev_name||'Unknown')}</span>'s HQ was captured by <span class="tk-gold">${esc(recentHq.new_name||'Unknown')}</span> ${recentHqAge<1?'just now':recentHqAge+'h ago'}`:null,
+    // Most victimized player
+    topVictimName&&topVictimCount>1?`🎯 <span class="tk-red">${esc(topVictimName)}</span> has had their HQ stormed <span class="tk-red">${topVictimCount}×</span> — a marked target`:null,
+    // HQ capture activity last 24h
+    hqRecent24.length>0?`⚡ <span class="tk-red">${hqRecent24.length}</span> HQ${hqRecent24.length===1?'':'s'} ${hqRecent24.length===1?'has':'have'} fallen in the last 24h`:null,
+    // Recent HQ captures feed (last 3, newest first)
+    ...recentHqFeed.map(c=>`🏴 <span class="tk-red">${esc(c.prev_name||'Unknown')}</span>'s HQ stormed by <span class="tk-gold">${esc(c.new_name||'Unknown')}</span> — ${hqAge(c.timestamp)}`),
     // Gainers
     gainers.length?`📈 24h gainers: `+gainers.map(r=>`<span class="tk-green">▲ ${esc(r.name||'?')} +${r.net}</span>`).join(' · '):null,
     // Losers
