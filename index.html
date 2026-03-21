@@ -275,6 +275,17 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 #garrison-tab-recall.active{display:block}
 #garrison-tab-history{display:none}
 #garrison-tab-history.active{display:block}
+#garrison-tab-raids{display:none}
+#garrison-tab-raids.active{display:block}
+/* Raids tab */
+#gar-raids-list{max-height:60vh;overflow-y:auto}
+#gar-raids-list::-webkit-scrollbar{width:3px}
+#gar-raids-list::-webkit-scrollbar-thumb{background:#333}
+.gar-raid-row{padding:7px 18px;border-bottom:1px solid #0f0f0f;font-size:11px;font-family:var(--font-mono);line-height:1.6}
+.gar-raid-row.as-attacker{border-left:3px solid #ff8483}
+.gar-raid-row.as-defender{border-left:3px solid #89c6ff}
+.gar-raid-meta{font-size:9px;color:#444;margin-top:2px}
+.gar-raid-loot{font-size:10px;color:#888;margin-top:2px}
 /* History tab */
 #gar-history-chart{padding:14px 18px 8px;overflow-x:auto}
 #gar-history-empty{padding:20px 18px;color:#444;font-size:11px;font-family:var(--font-mono)}
@@ -536,6 +547,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
       <button class="gar-tab active" id="tab-btn-navigate" onclick="switchGarrisonTab('navigate')">🗺 Navigate</button>
       <button class="gar-tab" id="tab-btn-recall" onclick="switchGarrisonTab('recall')">⬆ Recall</button>
       <button class="gar-tab" id="tab-btn-history" onclick="switchGarrisonTab('history')">📈 History</button>
+      <button class="gar-tab" id="tab-btn-raids" onclick="switchGarrisonTab('raids')">🗡 Raids</button>
     </div>
 
     <!-- Tab 1: Navigate -->
@@ -572,6 +584,11 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
     <!-- Tab 3: History -->
     <div id="garrison-tab-history">
       <div id="gar-history-chart"><div id="gar-history-empty">Loading history...</div></div>
+    </div>
+
+    <!-- Tab 4: Raids -->
+    <div id="garrison-tab-raids">
+      <div id="gar-raids-list"></div>
     </div>
   </div>
 </div>
@@ -2238,6 +2255,11 @@ async function loadBattleHistory(){
       const hqr=await fetch('hq_captures.json?t='+Date.now());
       if(hqr.ok) battleHistoryData.hqCaptures=await hqr.json();
     }catch(e){}
+    // Load raids
+    try{
+      const rdr=await fetch('raids.json?t='+Date.now());
+      if(rdr.ok) battleHistoryData.raids=await rdr.json();
+    }catch(e){}
     renderTopMovers();
   }catch(e){console.warn('Battle history error:',e);}
 }
@@ -2323,6 +2345,16 @@ function renderTopMovers(){
   const recentHqFeed=hqCaptures.slice(-3).reverse();
   function hqAge(ts){const h=Math.round((Date.now()-new Date(ts))/3600000);return h<1?'just now':h+'h ago';}
 
+  // Raids
+  const raids=battleHistoryData.raids||[];
+  const raidCount24=raids.filter(r=>new Date(r.timestamp).getTime()>=now24).length;
+  const raidCapCount=new Map();
+  for(const r of raids) raidCapCount.set(r.attacker_name||r.attacker_pid,(raidCapCount.get(r.attacker_name||r.attacker_pid)||0)+1);
+  let topRaiderName=null,topRaiderCount=0;
+  for(const [name,cnt] of raidCapCount){if(cnt>topRaiderCount){topRaiderCount=cnt;topRaiderName=name;}}
+  const recentRaidFeed=raids.slice(-3).reverse();
+  function raidAge(ts){const h=Math.round((Date.now()-new Date(ts))/3600000);return h<1?'just now':h<24?h+'h ago':Math.floor(h/24)+'d ago';}
+
   const sep='<span class="tk-sep">◆</span>';
 
   const items=[
@@ -2354,6 +2386,17 @@ function renderTopMovers(){
     gainers.length?`📈 24h gainers: `+gainers.map(r=>`<span class="tk-green">▲ ${esc(r.name||'?')} +${r.net}</span>`).join(' · '):null,
     // Losers
     losers.length?`📉 24h losers: `+losers.map(r=>`<span class="tk-red">▼ ${esc(r.name||'?')} ${r.net}</span>`).join(' · '):null,
+    // Raid activity 24h
+    raidCount24>0?`🔫 <span class="tk-red">${raidCount24}</span> raid${raidCount24===1?'':'s'} carried out in the last 24h`:null,
+    // Top raider all-time
+    topRaiderName&&topRaiderCount>1?`🗡 <span class="tk-gold">${esc(topRaiderName)}</span> is the most feared raider — <span class="tk-red">${topRaiderCount}</span> raids total`:null,
+    // Recent raids feed (last 3)
+    ...recentRaidFeed.map(r=>{
+      const cash=r.cash>0?`<span class="tk-gold">$${r.cash.toLocaleString('en')}</span> `:''
+      const wpn=r.weapons>0?`<span class="tk-red">${r.weapons} arms</span> `:'';
+      const xp=r.xp>0?`<span class="tk-blue">${r.xp} XP</span>`:'';
+      return `🗡 <span class="tk-gold">${esc(r.attacker_name||'Unknown')}</span> raided <span class="tk-red">${esc(r.defender_name||'Unknown')}</span> — took ${cash}${wpn}${xp} · ${raidAge(r.timestamp)}`;
+    }),
   ].filter(Boolean);
 
   const inner=document.getElementById('ticker-inner');
@@ -2370,11 +2413,12 @@ let garrisonRows = []; // [{tile, selected}]
 let garrisonAllTiles = []; // all tiles for navigate tab (incl HQ)
 
 function switchGarrisonTab(tab){
-  ['navigate','recall','history'].forEach(t=>{
+  ['navigate','recall','history','raids'].forEach(t=>{
     document.getElementById(`garrison-tab-${t}`).classList.toggle('active', t===tab);
     document.getElementById(`tab-btn-${t}`).classList.toggle('active', t===tab);
   });
   if(tab==='history') renderGarrisonHistory();
+  if(tab==='raids')   renderGarrisonRaids();
 }
 
 function openGarrison(pid, e){
@@ -2942,7 +2986,39 @@ function renderGarrisonHistory(){
   </svg>`;
 }
 
-// ── GHOST TURF MODE ───────────────────────────────────────────────────────────
+function renderGarrisonRaids(){
+  const el = document.getElementById('gar-raids-list');
+  if(!garrisonPid){ el.innerHTML='<div style="padding:16px;color:#444;font-size:11px;font-family:var(--font-mono)">No player selected.</div>'; return; }
+  const raids = (battleHistoryData&&battleHistoryData.raids)||[];
+  const playerRaids = raids.filter(r=>r.attacker_pid===garrisonPid||r.defender_pid===garrisonPid)
+    .slice().reverse(); // newest first
+  if(!playerRaids.length){
+    el.innerHTML='<div style="padding:16px;color:#444;font-size:11px;font-family:var(--font-mono)">No raids found for this player.<br><span style="color:#333">Raid data is collected from the next run onwards.</span></div>';
+    return;
+  }
+  function fmtAge(ts){const h=Math.round((Date.now()-new Date(ts))/3600000);return h<1?'just now':h<24?h+'h ago':Math.floor(h/24)+'d ago';}
+  function fmtLoot(r){
+    const parts=[];
+    if(r.cash>0)    parts.push(`<span style="color:#FAC775">$${r.cash.toLocaleString('en')}</span>`);
+    if(r.weapons>0) parts.push(`<span style="color:#ff8483">${r.weapons} arms</span>`);
+    if(r.xp>0)      parts.push(`<span style="color:#89c6ff">${r.xp} XP</span>`);
+    return parts.length?parts.join(' · '):'<span style="color:#333">nothing looted</span>';
+  }
+  const p = players.find(pl=>pl.pid===garrisonPid)||{};
+  const myName = p.name||'[unknown]';
+  el.innerHTML = playerRaids.map(r=>{
+    const isAtk = r.attacker_pid===garrisonPid;
+    const rowCls = isAtk?'gar-raid-row as-attacker':'gar-raid-row as-defender';
+    const dir = isAtk
+      ? `<span style="color:#ff8483">⚔ Raided</span> <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span>`
+      : `<span style="color:#89c6ff">🛡 Raided by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span>`;
+    return `<div class="${rowCls}">
+      <div>${dir}</div>
+      <div class="gar-raid-loot">${isAtk?'Looted: ':'Lost: '}${fmtLoot(r)}</div>
+      <div class="gar-raid-meta">${fmtAge(r.timestamp)}</div>
+    </div>`;
+  }).join('');
+}
 let ghostMode = false;
 let ghostTiles = []; // [{x,y,pid,name,dist}] closest ghost turfs
 

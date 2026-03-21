@@ -510,8 +510,119 @@ with open("player_history.json", "w", encoding="utf-8") as f:
 ph_size = os.path.getsize("player_history.json") / 1024
 print(f"  player_history.json written ({ph_size:.0f} KB, {len(ph_players)} players tracked)")
 
-print(f"\nDone!")
+# ── RAID TRACKING ──────────────────────────────────────────────────────────────
+# Fetches recent RaidBattleEvent events from the SUI blockchain.
+# Keeps the last MAX_RAIDS entries in raids.json, deduplicated by tx digest.
+print("Fetching raid events...")
+
+RAIDS_FILE  = "raids.json"
+MAX_RAIDS   = 500
+GAME_PKG    = "0x54a96d233f754afe62ad0e8b600b977d3f819be8b8c125391d135c3a4419332e"
+# Try both known event type names — use whichever returns results
+RAID_EVENT_TYPES = [
+    f"{GAME_PKG}::game_events::RaidBattleEvent",
+    f"{GAME_PKG}::game_events::RaidEvent",
+    f"{GAME_PKG}::game_events::RaidResultEvent",
+]
+
+try:
+    existing_raids = json.loads(open(RAIDS_FILE, encoding="utf-8").read())
+except Exception:
+    existing_raids = []
+
+known_digests = {r["digest"] for r in existing_raids if r.get("digest")}
+
+def parse_raid_event(ev):
+    """Extract raid fields from a raw SUI event dict."""
+    parsed   = ev.get("parsedJson") or ev.get("parsed_json") or {}
+    tx       = ev.get("id", {}).get("txDigest") or ev.get("txDigest") or ""
+    ts_ms    = ev.get("timestampMs") or ev.get("timestamp_ms")
+    if ts_ms:
+        ts = datetime.fromtimestamp(int(ts_ms)/1000, tz=timezone.utc).isoformat()
+    else:
+        ts = now_utc.isoformat()
+
+    # Resource fields — handle both nested and flat layouts
+    res = parsed.get("raided_resources") or parsed.get("loot") or {}
+    if isinstance(res, dict):
+        cash    = int(res.get("cash",    res.get("coins", 0)) or 0)
+        weapons = int(res.get("weapons", res.get("arms",  0)) or 0)
+        xp      = int(res.get("xp",     res.get("exp",   0)) or 0)
+    else:
+        cash = weapons = xp = 0
+
+    attacker_pid  = parsed.get("attacker_id")  or parsed.get("attacker_pid")  or ""
+    attacker_name = parsed.get("attacker_name") or parsed.get("attacker_player_name") or ""
+    defender_pid  = parsed.get("defender_id")  or parsed.get("defender_pid")  or ""
+    defender_name = parsed.get("defender_name") or parsed.get("defender_player_name") or ""
+
+    return {
+        "digest":         tx,
+        "attacker_pid":   attacker_pid,
+        "attacker_name":  attacker_name,
+        "defender_pid":   defender_pid,
+        "defender_name":  defender_name,
+        "cash":           cash,
+        "weapons":        weapons,
+        "xp":             xp,
+        "timestamp":      ts,
+    }
+
+new_raids = []
+raid_event_type_used = None
+
+for event_type in RAID_EVENT_TYPES:
+    cursor = None
+    pages  = 0
+    found  = 0
+    try:
+        while pages < 10:  # max 10 pages × 50 = 500 events
+            params = [
+                {"MoveEventType": event_type},
+                cursor,
+                50,
+                True,  # descending — newest first
+            ]
+            res = rpc("suix_queryEvents", params)
+            events = res.get("data", [])
+            if not events and pages == 0:
+                break  # wrong event type, try next
+
+            for ev in events:
+                r = parse_raid_event(ev)
+                if r["digest"] and r["digest"] not in known_digests:
+                    new_raids.append(r)
+                    known_digests.add(r["digest"])
+                    found += 1
+
+            pages += 1
+            if not res.get("hasNextPage"):
+                break
+            cursor = res.get("nextCursor")
+            time.sleep(DELAY)
+
+        if found > 0 or pages > 0:
+            raid_event_type_used = event_type
+            print(f"  Event type: {event_type.split('::')[-1]}")
+            print(f"  Pages fetched: {pages}, new raids: {found}")
+            break  # found the right type
+
+    except Exception as e:
+        print(f"  Warning: {event_type.split('::')[-1]} failed: {e}")
+        continue
+
+if not raid_event_type_used:
+    print("  No raid events found — raids.json unchanged")
+else:
+    all_raids = existing_raids + new_raids
+    all_raids.sort(key=lambda r: r["timestamp"])
+    all_raids = all_raids[-MAX_RAIDS:]
+    with open(RAIDS_FILE, "w", encoding="utf-8") as f:
+        json.dump(all_raids, f, separators=(",", ":"), ensure_ascii=False)
+    print(f"  raids.json updated ({len(all_raids)} total, {len(new_raids)} new)")
 print(f"  Players:   {len(player_list)}")
 print(f"  Tiles:     {len(compact_tiles)}")
 print(f"  Size:      {size_kb:.0f} KB")
 print(f"  Snapshots: {len(history_entries)} stored (max {MAX_SNAPSHOTS})")
+-e 
+print(f"\nDone!")
