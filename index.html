@@ -281,6 +281,7 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 
 /* ── GARRISON IN TIP ── */
 #tip .tgar,#touch-tooltip .tgar{color:#89c6ff;font-size:10px}
+#tip .tghost,#touch-tooltip .tghost{color:#6fffa9;font-size:10px}
 
 /* ── GARRISON MODAL ── */
 #garrison-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
@@ -487,7 +488,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
     <div id="ruler-y"></div>
     <div id="zoom-indicator">zoom ×1.0</div>
 
-    <div id="tip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div><div class="tgar"></div></div>
+    <div id="tip"><div class="tname"></div><div class="tpos"></div><div class="thq"></div><div class="tgar"></div><div class="tghost"></div></div>
     <div id="zoom-btns">
       <button onclick="zoomBy(1.3)">+</button>
       <button onclick="zoomBy(0.77)">−</button>
@@ -1413,6 +1414,11 @@ mapWrap.addEventListener('mousemove',e=>{
       tip.querySelector('.thq').textContent=t.isHQ?'⌂ Headquarters':'';
       const gar=(t.gH||t.gB||t.gE)?`👥 ${t.gH}H · ${t.gB}B · ${t.gE}E`:'';
       tip.querySelector('.tgar').textContent=gar;
+      // Ghost turf info
+      const ghostInfo = ghostMode ? ghostTiles.find(g=>g.x===wx&&g.y===wy) : null;
+      tip.querySelector('.tghost').textContent = ghostInfo
+        ? `👻 Ghost #${ghostTiles.indexOf(ghostInfo)+1} · ${ghostInfo.dist} away · ${ghostInfo.garrison} defenders`
+        : '';
       tip.style.display='block';
       const r2=mapWrap.getBoundingClientRect();
       tip.style.left=(e.clientX-r2.left+14)+'px';tip.style.top=(e.clientY-r2.top-8)+'px';
@@ -3143,19 +3149,25 @@ function computeGhostTiles(){
 
   const pidName = Object.fromEntries(players.map(p=>[p.pid, p.name||'[unknown]']));
 
-  // For each ghost tile find minimum manhattan distance to any of my tiles
   const ghosts = tiles.filter(t => ghostPids.has(t.pid));
   const scored = ghosts.map(g => {
+    // Chebyshev distance to nearest own tile
     let minDist = Infinity;
     for(const m of myTiles){
       const d = Math.max(Math.abs(g.x - m.x), Math.abs(g.y - m.y));
       if(d < minDist) minDist = d;
     }
-    return {x:g.x, y:g.y, pid:g.pid, name:pidName[g.pid]||'', dist:minDist};
+    // Garrison cost: total defenders (0 = undefended = best target)
+    const garrison = (g.gH||0) + (g.gB||0) + (g.gE||0);
+    // Combined score: lower = better target
+    // Normalize: distance matters most, garrison is tiebreaker
+    // garrison weight: each defender ~= 2 extra tiles of distance
+    const score = minDist + garrison * 2;
+    return {x:g.x, y:g.y, pid:g.pid, name:pidName[g.pid]||'', dist:minDist, garrison, score};
   });
 
-  // Sort by distance, keep top 20
-  scored.sort((a,b) => a.dist - b.dist);
+  // Sort by combined score (distance + garrison cost), keep top 20
+  scored.sort((a,b) => a.score - b.score);
   ghostTiles = scored.slice(0, 20);
 }
 
@@ -3168,22 +3180,39 @@ function drawGhostTiles(ctx){
     const sy = (maxY - g.y) * cs + panY;
     if(sx < -cs || sx > ctx.canvas.width + cs) return;
     if(sy < -cs || sy > ctx.canvas.height + cs) return;
+
     const speed = i < 5 ? 1800 : 2800;
     const pulse = 0.5 + 0.5 * Math.sin(now / speed * Math.PI * 2);
     const baseAlpha = i < 5 ? 0.9 : i < 10 ? 0.65 : 0.4;
     const alpha = baseAlpha * (0.6 + 0.4 * pulse);
     const bw = Math.max(1.5, cs * 0.14);
-    ctx.fillStyle = `rgba(111,255,169,${alpha * 0.18})`;
+
+    // Color: green = no garrison, yellow = some, red = heavy
+    const gar = g.garrison || 0;
+    const r = gar === 0 ? 111 : gar < 5 ? 255 : 255;
+    const gr = gar === 0 ? 255 : gar < 5 ? 220 : 80;
+    const b  = gar === 0 ? 169 : gar < 5 ? 50  : 50;
+
+    ctx.fillStyle = `rgba(${r},${gr},${b},${alpha * 0.18})`;
     ctx.fillRect(sx, sy, cs, cs);
-    ctx.strokeStyle = `rgba(111,255,169,${alpha})`;
+    ctx.strokeStyle = `rgba(${r},${gr},${b},${alpha})`;
     ctx.lineWidth = bw;
     ctx.strokeRect(sx + bw/2, sy + bw/2, cs - bw, cs - bw);
-    if(i < 5 && cs >= 14){
-      ctx.fillStyle = `rgba(111,255,169,${alpha})`;
-      ctx.font = `bold ${Math.min(10, cs*0.45)}px monospace`;
+
+    if(cs >= 14){
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(i+1, sx + cs/2, sy + cs/2);
+      if(i < 5){
+        // Show rank number
+        ctx.fillStyle = `rgba(${r},${gr},${b},${alpha})`;
+        ctx.font = `bold ${Math.min(10, cs*0.45)}px monospace`;
+        ctx.fillText(i+1, sx + cs/2, sy + cs/2);
+      } else if(gar > 0 && cs >= 18){
+        // Show garrison count for non-top-5
+        ctx.fillStyle = `rgba(${r},${gr},${b},${alpha * 0.8})`;
+        ctx.font = `${Math.min(8, cs*0.35)}px monospace`;
+        ctx.fillText(gar, sx + cs/2, sy + cs/2);
+      }
     }
   });
 }
