@@ -548,6 +548,7 @@ def parse_raid_event(ev):
 
     # Values are stored as fixed-point integers scaled by 2^64
     SCALE = 18446744073709551616  # 2^64
+    res = parsed.get("raided_resources") or {}
     raw_cash   = int(parsed.get("raided_cash",   res.get("cash",   0)) or 0)
     raw_weapon = int(parsed.get("raided_weapon", res.get("weapon", 0)) or 0)
     raw_xp     = int(res.get("xp", 0) or 0)
@@ -573,7 +574,11 @@ def parse_raid_event(ev):
     }
 
 new_raids = []
-raid_event_type_used = None
+
+# Fetch all event types and merge results.
+# RaidEvent has cash/weapon; RaidSearchEvent has the same tx but also XP.
+# We merge by tx digest so the final entry has all three values.
+new_raids_by_digest = {}
 
 for event_type in RAID_EVENT_TYPES:
     cursor = None
@@ -587,36 +592,48 @@ for event_type in RAID_EVENT_TYPES:
                 50,
                 True,  # descending — newest first
             ]
-            res = rpc("suix_queryEvents", params)
-            events = res.get("data", [])
+            result = rpc("suix_queryEvents", params)
+            events = result.get("data", [])
             if not events and pages == 0:
-                break  # wrong event type, try next
+                break  # event type not found, skip
 
             for ev in events:
                 r = parse_raid_event(ev)
-                if r["digest"] and r["digest"] not in known_digests:
-                    new_raids.append(r)
-                    known_digests.add(r["digest"])
+                if not r["digest"]:
+                    continue
+                if r["digest"] in known_digests:
+                    # Already stored — but merge XP if we have it now
+                    if r["xp"] > 0:
+                        for existing in existing_raids:
+                            if existing["digest"] == r["digest"] and existing.get("xp", 0) == 0:
+                                existing["xp"] = r["xp"]
+                    continue
+                if r["digest"] in new_raids_by_digest:
+                    # Merge: keep highest xp/cash/weapon across event types
+                    ex = new_raids_by_digest[r["digest"]]
+                    ex["cash"]    = max(ex["cash"],    r["cash"])
+                    ex["weapons"] = max(ex["weapons"], r["weapons"])
+                    ex["xp"]      = max(ex["xp"],      r["xp"])
+                else:
+                    new_raids_by_digest[r["digest"]] = r
                     found += 1
 
             pages += 1
-            if not res.get("hasNextPage"):
+            if not result.get("hasNextPage"):
                 break
-            cursor = res.get("nextCursor")
+            cursor = result.get("nextCursor")
             time.sleep(DELAY)
 
-        if found > 0 or pages > 0:
-            raid_event_type_used = event_type
-            print(f"  Event type: {event_type.split('::')[-1]}")
-            print(f"  Pages fetched: {pages}, new raids: {found}")
-            break  # found the right type
+        print(f"  {event_type.split('::')[-1]}: {pages} page(s), {found} new")
 
     except Exception as e:
         print(f"  Warning: {event_type.split('::')[-1]} failed: {e}")
         continue
 
-if not raid_event_type_used:
-    print("  No raid events found — raids.json unchanged")
+new_raids = list(new_raids_by_digest.values())
+
+if not new_raids and not any(r.get("xp", 0) > 0 for r in existing_raids):
+    print("  No new raid events found")
 else:
     all_raids = existing_raids + new_raids
     all_raids.sort(key=lambda r: r["timestamp"])
