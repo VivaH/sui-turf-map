@@ -31,8 +31,6 @@ body{font-family:var(--font-mono);background:var(--v-bg);color:#ccc;height:100vh
 #toolbar{display:flex;flex-direction:column;background:#000;border-bottom:2px solid #333;flex-shrink:0;overflow:visible}
 #toolbar-scroll{display:flex;gap:6px;align-items:center;padding:8px 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
 #toolbar-scroll::-webkit-scrollbar{display:none}
-#export-dropdown{position:fixed;z-index:500;display:none}
-#export-dropdown.open{display:block}
 #intel-dropdown{position:fixed;z-index:500;display:none}
 #intel-dropdown.open{display:block}
 #more-dropdown{position:fixed;z-index:500;display:none}
@@ -419,10 +417,6 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 .plcd.old{color:#ff8483}
 
 /* ── EXPORT DROPDOWN ── */
-#export-menu{background:#111;border:2px solid #333;box-shadow:4px 4px 0 #000;min-width:140px}
-#export-menu button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid #222;box-shadow:none;border-radius:0;padding:6px 12px;background:#111;color:#ccc}
-#export-menu button:hover{background:#1a1a1a;box-shadow:none}
-#export-menu button:last-child{border-bottom:none}
 .toolbar-dd-menu{background:#111;border:2px solid #333;box-shadow:4px 4px 0 #000;min-width:160px}
 .toolbar-dd-menu button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid #222;box-shadow:none;border-radius:0;padding:7px 14px;background:#111;color:#ccc;font-size:11px}
 .toolbar-dd-menu button:hover{background:#1a1a1a;box-shadow:none}
@@ -486,13 +480,6 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
   <span id="age"></span>
   <span id="status">Loading...</span>
 </div>
-<div id="export-dropdown">
-  <div id="export-menu">
-    <button onclick="exportPNG();closeMoreMenu()">⬇ PNG</button>
-    <button onclick="exportGIF();closeMoreMenu()" id="gifBtn">🎬 GIF animation</button>
-    <button onclick="exportCSV();closeMoreMenu()" id="csvBtn">⬇ CSV players</button>
-  </div>
-</div>
 <div id="intel-dropdown">
   <div class="toolbar-dd-menu">
     <button id="ghost-dd-btn" onclick="toggleGhostMode();closeIntelMenu()" disabled>👻 Ghost Turfs</button>
@@ -501,10 +488,11 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 </div>
 <div id="more-dropdown">
   <div class="toolbar-dd-menu">
-    <button onclick="openProfileModal();closeMoreMenu()">⚙ My Profile</button>
     <button id="report-dd-btn" onclick="openReport();closeMoreMenu()" style="display:none">📰 Weekly Report</button>
-    <div class="toolbar-dd-sep"></div>
-    <button onclick="toggleExportMenu()">⬇ Export ▾</button>
+    <button onclick="exportPNG();closeMoreMenu()">⬇ Export PNG</button>
+    <button onclick="exportGIF();closeMoreMenu()" id="gifBtn">🎬 Export GIF</button>
+    <button onclick="exportCSV();closeMoreMenu()" id="csvBtn">⬇ Export CSV</button>
+    <button onclick="openProfileModal();closeMoreMenu()">⚙ My Profile</button>
   </div>
 </div>
 </div>
@@ -2171,7 +2159,6 @@ document.getElementById('refresh-modal').addEventListener('click',e=>{if(e.targe
 document.addEventListener('click',e=>{
   const popup=document.getElementById('neighbor-popup');
   if(popup.style.display!=='none'&&!popup.contains(e.target))closeNeighborPopup();
-  if(!e.target.closest('#export-dropdown') && !e.target.closest('#export-btn')) closeExportMenu();
   if(!e.target.closest('#intel-dropdown') && !e.target.closest('#intel-btn')) closeIntelMenu();
   if(!e.target.closest('#more-dropdown') && !e.target.closest('#more-btn')) closeMoreMenu();
 });
@@ -3015,7 +3002,7 @@ function updateRuler(){
 }
 function _openToolbarDD(btnId, ddId){
   // Close all other dropdowns first
-  ['export-dropdown','intel-dropdown','more-dropdown'].forEach(id=>{
+  ['intel-dropdown','more-dropdown'].forEach(id=>{
     if(id!==ddId) document.getElementById(id).classList.remove('open');
   });
   const btn = document.getElementById(btnId);
@@ -3026,8 +3013,6 @@ function _openToolbarDD(btnId, ddId){
   dd.style.left = r.left + 'px';
   dd.classList.add('open');
 }
-function toggleExportMenu(){ _openToolbarDD('export-btn','export-dropdown'); }
-function closeExportMenu(){ document.getElementById('export-dropdown').classList.remove('open'); }
 function toggleIntelMenu(){ _openToolbarDD('intel-btn','intel-dropdown'); }
 function closeIntelMenu(){ document.getElementById('intel-dropdown').classList.remove('open'); }
 function toggleMoreMenu(){ _openToolbarDD('more-btn','more-dropdown'); }
