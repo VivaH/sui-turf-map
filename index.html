@@ -2392,9 +2392,10 @@ function renderTopMovers(){
     topRaiderName&&topRaiderCount>1?`🗡 <span class="tk-gold">${esc(topRaiderName)}</span> is the most feared raider — <span class="tk-red">${topRaiderCount}</span> raids total`:null,
     // Recent raids feed (last 3)
     ...recentRaidFeed.map(r=>{
-      const cash=r.cash>0?`<span class="tk-gold">$${r.cash.toLocaleString('en')}</span> `:''
-      const wpn=r.weapons>0?`<span class="tk-red">${r.weapons} arms</span> `:'';
-      const xp=r.xp>0?`<span class="tk-blue">${r.xp} XP</span>`:'';
+      const fmt=v=>v.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const cash=r.cash>0?`<span class="tk-gold">$${fmt(r.cash)}</span> `:'';
+      const wpn=r.weapons>0?`<span class="tk-red">${fmt(r.weapons)} arms</span> `:'';
+      const xp=r.xp>0?`<span class="tk-blue">${fmt(r.xp)} XP</span>`:'';
       return `🗡 <span class="tk-gold">${esc(r.attacker_name||'Unknown')}</span> raided <span class="tk-red">${esc(r.defender_name||'Unknown')}</span> — took ${cash}${wpn}${xp} · ${raidAge(r.timestamp)}`;
     }),
   ].filter(Boolean);
@@ -2999,9 +3000,9 @@ function renderGarrisonRaids(){
   function fmtAge(ts){const h=Math.round((Date.now()-new Date(ts))/3600000);return h<1?'just now':h<24?h+'h ago':Math.floor(h/24)+'d ago';}
   function fmtLoot(r){
     const parts=[];
-    if(r.cash>0)    parts.push(`<span style="color:#FAC775">$${r.cash.toLocaleString('en')}</span>`);
-    if(r.weapons>0) parts.push(`<span style="color:#ff8483">${r.weapons} arms</span>`);
-    if(r.xp>0)      parts.push(`<span style="color:#89c6ff">${r.xp} XP</span>`);
+    if(r.cash>0)    parts.push(`<span style="color:#FAC775">$${r.cash.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`);
+    if(r.weapons>0) parts.push(`<span style="color:#ff8483">${r.weapons.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})} arms</span>`);
+    if(r.xp>0)      parts.push(`<span style="color:#89c6ff">${r.xp.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2})} XP</span>`);
     return parts.length?parts.join(' · '):'<span style="color:#333">nothing looted</span>';
   }
   const p = players.find(pl=>pl.pid===garrisonPid)||{};

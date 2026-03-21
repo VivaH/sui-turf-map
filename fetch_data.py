@@ -542,19 +542,15 @@ def parse_raid_event(ev):
     else:
         ts = now_utc.isoformat()
 
-    # RaidEvent: flat fields raided_cash / raided_weapon
-    # RaidSearchEvent: nested raided_resources {cash, weapon, xp}
-    res = parsed.get("raided_resources") or {}
+    # Values are stored as fixed-point integers scaled by 2^64
+    SCALE = 18446744073709551616  # 2^64
     raw_cash   = int(parsed.get("raided_cash",   res.get("cash",   0)) or 0)
     raw_weapon = int(parsed.get("raided_weapon", res.get("weapon", 0)) or 0)
     raw_xp     = int(res.get("xp", 0) or 0)
 
-    # Values are stored as internal u64/u128 — cap at a reasonable display max
-    # to guard against overflow sentinel values (2^63 * 1000 etc.)
-    MAX_DISPLAY = 10_000_000_000  # 10 billion; anything above is likely a sentinel
-    cash    = min(raw_cash,   MAX_DISPLAY)
-    weapons = min(raw_weapon, MAX_DISPLAY)
-    xp      = min(raw_xp,     MAX_DISPLAY)
+    cash    = raw_cash   / SCALE
+    weapons = raw_weapon / SCALE
+    xp      = raw_xp     / SCALE
 
     # Name fields differ between event types
     attacker_name = parsed.get("attacker_name") or parsed.get("attacker_player_name") or ""
