@@ -33,6 +33,10 @@ body{font-family:var(--font-mono);background:var(--v-bg);color:#ccc;height:100vh
 #toolbar-scroll::-webkit-scrollbar{display:none}
 #export-dropdown{position:fixed;z-index:500;display:none}
 #export-dropdown.open{display:block}
+#intel-dropdown{position:fixed;z-index:500;display:none}
+#intel-dropdown.open{display:block}
+#more-dropdown{position:fixed;z-index:500;display:none}
+#more-dropdown.open{display:block}
 #toolbar h1{font-family:var(--font-bangers);font-size:22px;font-weight:400;color:#fff;white-space:nowrap;margin-right:6px;letter-spacing:2px;text-transform:uppercase}
 
 /* Ruby-style buttons */
@@ -419,6 +423,12 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 #export-menu button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid #222;box-shadow:none;border-radius:0;padding:6px 12px;background:#111;color:#ccc}
 #export-menu button:hover{background:#1a1a1a;box-shadow:none}
 #export-menu button:last-child{border-bottom:none}
+.toolbar-dd-menu{background:#111;border:2px solid #333;box-shadow:4px 4px 0 #000;min-width:160px}
+.toolbar-dd-menu button{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid #222;box-shadow:none;border-radius:0;padding:7px 14px;background:#111;color:#ccc;font-size:11px}
+.toolbar-dd-menu button:hover{background:#1a1a1a;box-shadow:none}
+.toolbar-dd-menu button:last-child{border-bottom:none}
+.toolbar-dd-menu button:disabled{opacity:0.35;cursor:default}
+.toolbar-dd-sep{height:1px;background:#222;margin:2px 0}
 
 /* ── ZOOM INDICATOR ── */
 #zoom-indicator{position:absolute;top:12px;left:12px;background:rgba(0,0,0,0.6);border:1px solid #333;padding:2px 6px;font-size:9px;font-family:var(--font-mono);color:#555;pointer-events:none;z-index:10}
@@ -463,27 +473,38 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 <div id="toolbar-scroll">
   <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.1</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
-  <button onclick="openProfileModal()" title="My profiles" style="border-color:#555;color:#aaa">⚙ My Profile</button>
-  <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh data</button>
+  <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh</button>
   <div class="sep"></div>
   <button id="route-btn" onclick="toggleRouteMode()">🗺 Route</button>
   <span id="route-indicator">Click a tile or player to select A → B</span>
-  <div class="sep"></div>
-  <button onclick="toggleExportMenu()" id="export-btn">⬇ Export ▾</button>
-  <button id="battle-btn" onclick="toggleBattleHistory()" style="display:none">⚔ 24h Changes</button>
+  <button id="battle-btn" onclick="toggleBattleHistory()" style="display:none">⚔ 24h</button>
   <button id="top10-btn" onclick="toggleTop10()">★ Top 10</button>
-  <button id="ghost-btn" onclick="toggleGhostMode()" disabled title="Select a player first">👻 Ghost Turfs</button>
-  <button id="softtarget-btn" onclick="openSoftTargets()" disabled title="Select a player first">🎯 Soft Targets</button>
-  <button onclick="openReport()" id="report-btn" style="border-color:#555;color:#aaa;display:none">📰 Weekly Report</button>
+  <div class="sep"></div>
+  <button id="intel-btn" onclick="toggleIntelMenu()" disabled title="Select a player first">🔍 Intel ▾</button>
+  <button onclick="toggleMoreMenu()" id="more-btn">⋯ More ▾</button>
   <div class="sep"></div>
   <span id="age"></span>
   <span id="status">Loading...</span>
 </div>
 <div id="export-dropdown">
   <div id="export-menu">
-    <button onclick="exportPNG();closeExportMenu()">⬇ PNG</button>
-    <button onclick="exportGIF();closeExportMenu()" id="gifBtn">🎬 GIF animation</button>
-    <button onclick="exportCSV();closeExportMenu()" id="csvBtn">⬇ CSV players</button>
+    <button onclick="exportPNG();closeMoreMenu()">⬇ PNG</button>
+    <button onclick="exportGIF();closeMoreMenu()" id="gifBtn">🎬 GIF animation</button>
+    <button onclick="exportCSV();closeMoreMenu()" id="csvBtn">⬇ CSV players</button>
+  </div>
+</div>
+<div id="intel-dropdown">
+  <div class="toolbar-dd-menu">
+    <button id="ghost-dd-btn" onclick="toggleGhostMode();closeIntelMenu()" disabled>👻 Ghost Turfs</button>
+    <button id="softtarget-dd-btn" onclick="openSoftTargets();closeIntelMenu()" disabled>🎯 Soft Targets</button>
+  </div>
+</div>
+<div id="more-dropdown">
+  <div class="toolbar-dd-menu">
+    <button onclick="openProfileModal();closeMoreMenu()">⚙ My Profile</button>
+    <button id="report-dd-btn" onclick="openReport();closeMoreMenu()" style="display:none">📰 Weekly Report</button>
+    <div class="toolbar-dd-sep"></div>
+    <button onclick="toggleExportMenu()">⬇ Export ▾</button>
   </div>
 </div>
 </div>
@@ -1719,10 +1740,12 @@ function jumpToPlayer(pid){
   highlightPid=pid;
   selectedPid=pid;
   // Enable ghost + soft targets buttons and recompute if mode is active
-  const ghostBtn=document.getElementById('ghost-btn');
-  ghostBtn.disabled=false;
+  const ghostBtn=document.getElementById('intel-btn');
+  if(ghostBtn) ghostBtn.disabled=false;
+  const ghostDdBtn=document.getElementById('ghost-dd-btn');
+  if(ghostDdBtn) ghostDdBtn.disabled=false;
   if(ghostMode){ computeGhostTiles(); _startGhostLoop(); }
-  const stBtn=document.getElementById('softtarget-btn');
+  const stBtn=document.getElementById('softtarget-dd-btn');
   if(stBtn) stBtn.disabled=false;
   drawMap();drawMinimap();
   setTimeout(()=>{highlightPid=null;drawMap();},2000);
@@ -2149,6 +2172,8 @@ document.addEventListener('click',e=>{
   const popup=document.getElementById('neighbor-popup');
   if(popup.style.display!=='none'&&!popup.contains(e.target))closeNeighborPopup();
   if(!e.target.closest('#export-dropdown') && !e.target.closest('#export-btn')) closeExportMenu();
+  if(!e.target.closest('#intel-dropdown') && !e.target.closest('#intel-btn')) closeIntelMenu();
+  if(!e.target.closest('#more-dropdown') && !e.target.closest('#more-btn')) closeMoreMenu();
 });
 
 // ── SHARED UTILS ─────────────────────────────────────────────────────────────
@@ -2988,18 +3013,25 @@ function updateRuler(){
   }
   ry.innerHTML=yHtml;
 }
-function toggleExportMenu(){
-  const btn = document.getElementById('export-btn');
-  const dd  = document.getElementById('export-dropdown');
+function _openToolbarDD(btnId, ddId){
+  // Close all other dropdowns first
+  ['export-dropdown','intel-dropdown','more-dropdown'].forEach(id=>{
+    if(id!==ddId) document.getElementById(id).classList.remove('open');
+  });
+  const btn = document.getElementById(btnId);
+  const dd  = document.getElementById(ddId);
   if(dd.classList.contains('open')){ dd.classList.remove('open'); return; }
   const r = btn.getBoundingClientRect();
   dd.style.top  = (r.bottom + 2) + 'px';
   dd.style.left = r.left + 'px';
   dd.classList.add('open');
 }
-function closeExportMenu(){
-  document.getElementById('export-dropdown').classList.remove('open');
-}
+function toggleExportMenu(){ _openToolbarDD('export-btn','export-dropdown'); }
+function closeExportMenu(){ document.getElementById('export-dropdown').classList.remove('open'); }
+function toggleIntelMenu(){ _openToolbarDD('intel-btn','intel-dropdown'); }
+function closeIntelMenu(){ document.getElementById('intel-dropdown').classList.remove('open'); }
+function toggleMoreMenu(){ _openToolbarDD('more-btn','more-dropdown'); }
+function closeMoreMenu(){ document.getElementById('more-dropdown').classList.remove('open'); }
 
 // ── COMPACT MODE ──────────────────────────────────────────────────────────────
 function toggleCompact(btn){
@@ -3163,7 +3195,7 @@ let _ghostRaf = 0;   // dedicated rAF handle for ghost pulse animation
 
 function toggleGhostMode(){
   ghostMode = !ghostMode;
-  const btn = document.getElementById('ghost-btn');
+  const btn = document.getElementById('ghost-dd-btn');
   btn.classList.toggle('ghost-active', ghostMode);
   if(ghostMode){ computeGhostTiles(); _startGhostLoop(); }
   else{ ghostTiles = []; _stopGhostLoop(); }
@@ -3349,7 +3381,7 @@ async function loadWeeklyReport(){
     const r = await fetch('weekly_report.json?t='+Date.now());
     if(!r.ok) return;
     weeklyReport = await r.json();
-    const btn = document.getElementById('report-btn');
+    const btn = document.getElementById('report-dd-btn');
     if(btn) btn.style.display = '';
   }catch(e){ /* no report yet */ }
 }
