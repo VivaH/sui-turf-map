@@ -272,6 +272,13 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 #garrison-tab-navigate.active{display:block}
 #garrison-tab-recall{display:none}
 #garrison-tab-recall.active{display:block}
+#garrison-tab-history{display:none}
+#garrison-tab-history.active{display:block}
+/* History tab */
+#gar-history-chart{padding:14px 18px 8px;overflow-x:auto}
+#gar-history-empty{padding:20px 18px;color:#444;font-size:11px;font-family:var(--font-mono)}
+/* Ghost mode */
+#ghost-btn.ghost-active{background:#0a1a0a;border-color:var(--v-green);color:var(--v-green);box-shadow:2px 2px 0 #1a3a1a}
 /* Navigate tab */
 #gar-nav-list{max-height:60vh;overflow-y:auto}
 #gar-nav-list::-webkit-scrollbar{width:3px}
@@ -405,6 +412,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
   </div>
   <button id="battle-btn" onclick="toggleBattleHistory()" style="display:none">⚔ 24h Changes</button>
   <button id="top10-btn" onclick="toggleTop10()">★ Top 10</button>
+  <button id="ghost-btn" onclick="toggleGhostMode()" disabled title="Select a player first">👻 Ghost Turfs</button>
   <button onclick="openReport()" id="report-btn" style="border-color:#555;color:#aaa;display:none">📰 Weekly Report</button>
   <div class="sep"></div>
   <span id="age"></span>
@@ -526,6 +534,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
     <div id="garrison-tabs">
       <button class="gar-tab active" id="tab-btn-navigate" onclick="switchGarrisonTab('navigate')">🗺 Navigate</button>
       <button class="gar-tab" id="tab-btn-recall" onclick="switchGarrisonTab('recall')">⬆ Recall</button>
+      <button class="gar-tab" id="tab-btn-history" onclick="switchGarrisonTab('history')">📈 History</button>
     </div>
 
     <!-- Tab 1: Navigate -->
@@ -559,10 +568,12 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
         <button id="garrison-recall-btn" onclick="openWalletModal()">⬆ Recall to HQ</button>
       </div>
     </div>
+    <!-- Tab 3: History -->
+    <div id="garrison-tab-history">
+      <div id="gar-history-chart"><div id="gar-history-empty">Loading history...</div></div>
+    </div>
   </div>
 </div>
-
-<!-- Weekly Report modal -->
 <div id="report-modal">
   <div id="report-box">
     <div id="report-head">
@@ -1214,6 +1225,9 @@ function drawMap(){
       lx2+=ctx.measureText(lbl).width+34;
     }
   }
+
+  // Ghost turf overlay
+  drawGhostTiles(ctx);
 }
 
 function drawMinimap(){
@@ -1531,6 +1545,10 @@ function jumpToPlayer(pid){
   panX=cv.width/2-((bx0+bx1)/2-minX)*CELL*zoom;panY=cv.height/2-(maxY-(by0+by1)/2)*CELL*zoom;
   highlightPid=pid;
   selectedPid=pid;
+  // Enable ghost button and recompute if mode is active
+  const ghostBtn=document.getElementById('ghost-btn');
+  ghostBtn.disabled=false;
+  if(ghostMode){ computeGhostTiles(); }
   drawMap();drawMinimap();
   setTimeout(()=>{highlightPid=null;drawMap();},2000);
 }
@@ -2306,10 +2324,11 @@ let garrisonRows = []; // [{tile, selected}]
 let garrisonAllTiles = []; // all tiles for navigate tab (incl HQ)
 
 function switchGarrisonTab(tab){
-  document.getElementById('garrison-tab-navigate').classList.toggle('active', tab==='navigate');
-  document.getElementById('garrison-tab-recall').classList.toggle('active', tab==='recall');
-  document.getElementById('tab-btn-navigate').classList.toggle('active', tab==='navigate');
-  document.getElementById('tab-btn-recall').classList.toggle('active', tab==='recall');
+  ['navigate','recall','history'].forEach(t=>{
+    document.getElementById(`garrison-tab-${t}`).classList.toggle('active', t===tab);
+    document.getElementById(`tab-btn-${t}`).classList.toggle('active', t===tab);
+  });
+  if(tab==='history') renderGarrisonHistory();
 }
 
 function openGarrison(pid, e){
@@ -2788,6 +2807,167 @@ function updateZoomIndicator(){
 
 
 
+// ── PLAYER HISTORY ────────────────────────────────────────────────────────────
+let playerHistory = null;
+
+async function loadPlayerHistory(){
+  try{
+    const r = await fetch('player_history.json?t='+Date.now());
+    if(r.ok) playerHistory = await r.json();
+  }catch(e){}
+}
+
+function renderGarrisonHistory(){
+  const el = document.getElementById('gar-history-chart');
+  if(!garrisonPid){ el.innerHTML='<div id="gar-history-empty">No player selected.</div>'; return; }
+  if(!playerHistory){
+    el.innerHTML='<div id="gar-history-empty">History data not available yet.<br>Will appear after next data refresh.</div>';
+    return;
+  }
+  const counts = playerHistory.players?.[garrisonPid];
+  if(!counts||counts.length<2){
+    el.innerHTML='<div id="gar-history-empty">Not enough history for this player.</div>';
+    return;
+  }
+  const labels = playerHistory.snapshots||[];
+  const W=460, H=160, PAD={t:16,r:20,b:36,l:48};
+  const cW=W-PAD.l-PAD.r, cH=H-PAD.t-PAD.b;
+  const maxV=Math.max(...counts), minV=Math.min(...counts);
+  const range=maxV-minV||1;
+  const n=counts.length;
+  const xStep=cW/(n-1);
+
+  // Build polyline points
+  const pts=counts.map((v,i)=>{
+    const x=PAD.l+i*xStep;
+    const y=PAD.t+cH-(v-minV)/range*cH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  // Y-axis ticks (3)
+  const yTicks=[minV, Math.round((minV+maxV)/2), maxV];
+  const yTicksSvg=yTicks.map(v=>{
+    const y=PAD.t+cH-(v-minV)/range*cH;
+    return `<line x1="${PAD.l-4}" y1="${y.toFixed(1)}" x2="${PAD.l}" y2="${y.toFixed(1)}" stroke="#333"/>
+    <text x="${PAD.l-8}" y="${(y+4).toFixed(1)}" text-anchor="end" fill="#555" font-size="9" font-family="monospace">${v}</text>`;
+  }).join('');
+
+  // X-axis labels: show ~5 evenly spaced
+  const xIdxs=[0,...[1,2,3].map(i=>Math.round(i*(n-1)/4)),n-1].filter((v,i,a)=>a.indexOf(v)===i);
+  const xLabelsSvg=xIdxs.map(i=>{
+    const x=PAD.l+i*xStep;
+    const lbl=(labels[i]||'').replace(/UTC$/,'').trim();
+    return `<text x="${x.toFixed(1)}" y="${H-4}" text-anchor="middle" fill="#444" font-size="8" font-family="monospace">${esc(lbl)}</text>`;
+  }).join('');
+
+  // Area fill
+  const areaFirst=`${PAD.l},${PAD.t+cH}`;
+  const areaLast=`${(PAD.l+(n-1)*xStep).toFixed(1)},${PAD.t+cH}`;
+  const areaPoints=`${areaFirst} ${pts} ${areaLast}`;
+
+  // Current value annotation
+  const lastVal=counts[n-1];
+  const firstVal=counts[0];
+  const diff=lastVal-firstVal;
+  const diffStr=(diff>=0?'+':'')+diff;
+  const diffCol=diff>0?'#6fffa9':diff<0?'#ff8483':'#888';
+
+  el.innerHTML=`
+  <div style="font-size:10px;font-family:var(--font-mono);color:#666;margin-bottom:6px;display:flex;justify-content:space-between">
+    <span>Turf count — last ${n} snapshots</span>
+    <span style="color:${diffCol}">${diffStr} turfs vs ${labels[0]||'start'}</span>
+  </div>
+  <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:auto;display:block">
+    <!-- Grid lines -->
+    ${yTicks.map(v=>{const y=PAD.t+cH-(v-minV)/range*cH;return `<line x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W-PAD.r}" y2="${y.toFixed(1)}" stroke="#1a1a1a" stroke-dasharray="3,3"/>`;}).join('')}
+    <!-- Axes -->
+    <line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+cH}" stroke="#333"/>
+    <line x1="${PAD.l}" y1="${PAD.t+cH}" x2="${W-PAD.r}" y2="${PAD.t+cH}" stroke="#333"/>
+    <!-- Y ticks + labels -->
+    ${yTicksSvg}
+    <!-- X labels -->
+    ${xLabelsSvg}
+    <!-- Area fill -->
+    <polygon points="${areaPoints}" fill="#FAC775" opacity="0.07"/>
+    <!-- Line -->
+    <polyline points="${pts}" fill="none" stroke="#FAC775" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- Last point dot -->
+    <circle cx="${(PAD.l+(n-1)*xStep).toFixed(1)}" cy="${(PAD.t+cH-(lastVal-minV)/range*cH).toFixed(1)}" r="3" fill="#FAC775"/>
+  </svg>`;
+}
+
+// ── GHOST TURF MODE ───────────────────────────────────────────────────────────
+let ghostMode = false;
+let ghostTiles = []; // [{x,y,pid,name,dist}] closest ghost turfs
+
+function toggleGhostMode(){
+  ghostMode = !ghostMode;
+  const btn = document.getElementById('ghost-btn');
+  btn.classList.toggle('ghost-active', ghostMode);
+  if(ghostMode) computeGhostTiles();
+  else ghostTiles = [];
+  drawMap();
+}
+
+function computeGhostTiles(){
+  ghostTiles = [];
+  if(!selectedPid) return;
+
+  // Ghost players = exactly 1 tile, not my own profile
+  const ghostPids = new Set(
+    players.filter(p => p.tiles === 1 && !MY_IDS.has(p.pid)).map(p => p.pid)
+  );
+  if(!ghostPids.size) return;
+
+  // My tiles for distance calculation
+  const myTiles = tiles.filter(t => t.pid === selectedPid);
+  if(!myTiles.length) return;
+
+  const pidName = Object.fromEntries(players.map(p=>[p.pid, p.name||'[unknown]']));
+
+  // For each ghost tile find minimum manhattan distance to any of my tiles
+  const ghosts = tiles.filter(t => ghostPids.has(t.pid));
+  const scored = ghosts.map(g => {
+    let minDist = Infinity;
+    for(const m of myTiles){
+      const d = Math.abs(g.x - m.x) + Math.abs(g.y - m.y);
+      if(d < minDist) minDist = d;
+    }
+    return {x:g.x, y:g.y, pid:g.pid, name:pidName[g.pid]||'', dist:minDist};
+  });
+
+  // Sort by distance, keep top 20
+  scored.sort((a,b) => a.dist - b.dist);
+  ghostTiles = scored.slice(0, 20);
+}
+
+function drawGhostTiles(ctx){
+  if(!ghostMode || !ghostTiles.length) return;
+  const cs = CELL * zoom;
+  ghostTiles.forEach((g, i) => {
+    const sx = (g.x - minX) * cs + panX;
+    const sy = (maxY - g.y) * cs + panY;
+    if(sx < -cs || sx > ctx.canvas.width + cs) return;
+    if(sy < -cs || sy > ctx.canvas.height + cs) return;
+
+    // Pulsing ghost overlay
+    const alpha = i < 5 ? 0.85 : i < 10 ? 0.65 : 0.45;
+    ctx.fillStyle = `rgba(111,255,169,${alpha})`;
+    ctx.fillRect(sx, sy, cs, cs);
+
+    // Rank number for top 5
+    if(i < 5 && cs >= 12){
+      ctx.fillStyle = '#000';
+      ctx.font = `bold ${Math.min(10, cs*0.5)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(i+1, sx + cs/2, sy + cs/2);
+    }
+  });
+}
+
+// Expose drawGhostTiles to be called from drawMap
+
 // ── WEEKLY REPORT ─────────────────────────────────────────────────────────────
 let weeklyReport = null;
 
@@ -2840,6 +3020,7 @@ resizeCanvas();
 loadHistory();
 loadLatest();
 loadWeeklyReport();
+loadPlayerHistory();
 </script>
 
 </body>
