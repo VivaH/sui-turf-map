@@ -162,6 +162,29 @@ button:disabled{opacity:0.35;cursor:default;box-shadow:none;transform:none}
 .nroute{font-size:9px;padding:2px 5px;border-radius:0;flex-shrink:0;background:#0a0a0a;border:1px solid #333;color:#666;box-shadow:1px 1px 0 #000}
 .nroute:hover{background:var(--v-blue);border-color:var(--v-blue);color:#fff;box-shadow:none}
 
+/* ── REPORT MODAL ── */
+#report-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:300;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+#report-modal.open{display:flex}
+#report-box{background:#0e0c07;border:2px solid #6a5a1e;border-radius:0;width:100%;max-width:720px;overflow:hidden;margin:auto;box-shadow:6px 6px 0 #000}
+#report-head{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:2px solid #2a2000;background:#080600}
+#report-head-title{font-family:var(--font-bangers);font-size:15px;letter-spacing:2px;color:var(--v-gold);text-transform:uppercase}
+#report-head-meta{font-size:10px;color:#555;font-family:var(--font-mono)}
+#report-close{background:transparent;border:none;color:#555;font-size:18px;cursor:pointer;padding:0;line-height:1;box-shadow:none}
+#report-close:hover{color:#fff}
+#report-content{padding:24px 32px;max-height:78vh;overflow-y:auto;font-family:Georgia,'Times New Roman',serif;color:#c8b87a;line-height:1.85;font-size:13px}
+#report-content::-webkit-scrollbar{width:3px}
+#report-content::-webkit-scrollbar-thumb{background:#3a2a00}
+#report-content h1{font-family:var(--font-bangers);font-size:32px;letter-spacing:3px;color:#f5d87a;text-align:center;margin-bottom:4px;text-transform:uppercase;line-height:1.1}
+#report-content h2{font-size:11px;color:#7a6a3a;text-align:center;margin-bottom:20px;letter-spacing:2px;text-transform:uppercase;font-family:var(--font-mono);font-weight:400;border-bottom:1px solid #2a2000;padding-bottom:10px}
+#report-content h3{font-family:var(--font-bangers);font-size:17px;letter-spacing:1px;color:#e8c85a;margin:18px 0 6px;text-transform:uppercase}
+#report-content p{margin-bottom:12px;text-align:justify}
+#report-content hr{border:none;border-top:1px solid #2a2000;margin:18px 0}
+#report-content blockquote{border:1px solid #4a3a0a;background:#090700;padding:14px 18px;margin:14px 0;color:#a89040;font-style:italic}
+#report-content blockquote h3{font-size:13px;margin:0 0 6px}
+#report-content strong{color:#f0d060}
+#report-content em{color:#b09040}
+#report-loading{padding:40px;text-align:center;color:#555;font-family:var(--font-mono);font-size:11px}
+
 /* ── REFRESH MODAL ── */
 #refresh-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:300;align-items:center;justify-content:center}
 #refresh-modal.open{display:flex}
@@ -370,6 +393,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
   </div>
   <button id="battle-btn" onclick="toggleBattleHistory()" style="display:none">⚔ 24h Changes</button>
   <button id="top10-btn" onclick="toggleTop10()">★ Top 10</button>
+  <button onclick="openReport()" id="report-btn" style="border-color:#555;color:#aaa;display:none">📰 Weekly Report</button>
   <div class="sep"></div>
   <span id="age"></span>
   <span id="status">Loading...</span>
@@ -523,6 +547,20 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
         <button id="garrison-recall-btn" onclick="openWalletModal()">⬆ Recall to HQ</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Weekly Report modal -->
+<div id="report-modal">
+  <div id="report-box">
+    <div id="report-head">
+      <div>
+        <div id="report-head-title">📰 The Vendetta Gazette</div>
+        <div id="report-head-meta">—</div>
+      </div>
+      <button id="report-close" onclick="closeReport()">✕</button>
+    </div>
+    <div id="report-content"><div id="report-loading">Loading report...</div></div>
   </div>
 </div>
 
@@ -2737,10 +2775,44 @@ function updateZoomIndicator(){
 
 
 
+// ── WEEKLY REPORT ─────────────────────────────────────────────────────────────
+let weeklyReport = null;
+
+async function loadWeeklyReport(){
+  try{
+    const r = await fetch('weekly_report.json?t='+Date.now());
+    if(!r.ok) return;
+    weeklyReport = await r.json();
+    const btn = document.getElementById('report-btn');
+    if(btn) btn.style.display = '';
+  }catch(e){ /* no report yet */ }
+}
+
+function openReport(){
+  if(!weeklyReport){ return; }
+  const content = document.getElementById('report-content');
+  const meta    = document.getElementById('report-head-meta');
+  const start   = new Date(weeklyReport.period_start);
+  const end     = new Date(weeklyReport.period_end);
+  const fmt     = d => d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  meta.textContent = `${fmt(start)} – ${fmt(end)} · ${weeklyReport.stats?.hq_captures??0} HQ raids · Generated ${new Date(weeklyReport.generated).toLocaleDateString('en-GB')}`;
+  content.innerHTML = weeklyReport.html || '<p>No content.</p>';
+  document.getElementById('report-modal').classList.add('open');
+}
+
+function closeReport(){
+  document.getElementById('report-modal').classList.remove('open');
+}
+
+document.getElementById('report-modal').addEventListener('click', e=>{
+  if(e.target === document.getElementById('report-modal')) closeReport();
+});
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 resizeCanvas();
 loadHistory();
 loadLatest();
+loadWeeklyReport();
 </script>
 
 </body>
