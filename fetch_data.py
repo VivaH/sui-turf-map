@@ -530,6 +530,10 @@ try:
 except Exception:
     existing_raids = []
 
+# Migration: discard any entry where cash or weapons > 1,000,000
+# (these are pre-scaling sentinel values from a previous incorrect run)
+existing_raids = [r for r in existing_raids if r.get("cash", 0) <= 1_000_000 and r.get("weapons", 0) <= 1_000_000]
+
 known_digests = {r["digest"] for r in existing_raids if r.get("digest")}
 
 def parse_raid_event(ev):
