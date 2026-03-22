@@ -141,6 +141,8 @@ for i in range(0, len(real_pids), BATCH):
 named = sum(1 for p in profiles.values() if p["name"])
 print(f"  Profiles: {len(profiles)} ({named} with name)")
 hq_set = {p["hqTile"] for p in profiles.values() if p.get("hqTile")}
+# Map tile_id -> owner pid so we can verify HQ ownership
+hq_tile_owner = {p["hqTile"]: pid for pid, p in profiles.items() if p.get("hqTile")}
 
 # ── STEP 3: TurfSystem ────────────────────────────────────────────────────────
 print("Step 3/4: Loading TurfSystem...")
@@ -213,9 +215,10 @@ for i in range(0, len(tile_ids), BATCH):
                 if k == "henchman":   g_h = v
                 elif k == "bouncer":  g_b = v
                 elif k == "enforcer": g_e = v
-        raw_tiles.append({"x": x, "y": y, "pid": pid, "hq": tile_id in hq_set,
+        is_hq = tile_id in hq_set and hq_tile_owner.get(tile_id) == pid
+        raw_tiles.append({"x": x, "y": y, "pid": pid, "hq": is_hq,
                           "g_h": g_h, "g_b": g_b, "g_e": g_e,
-                          "oid": tile_id if (g_h or g_b or g_e or tile_id in hq_set) else None})
+                          "oid": tile_id if (g_h or g_b or g_e or is_hq) else None})
         owner_count[pid] = owner_count.get(pid, 0) + 1
     if i % 2000 == 0 and i > 0: print(f"  {i}/{len(tile_ids)} tiles → {len(owner_count)} players")
     time.sleep(DELAY)
