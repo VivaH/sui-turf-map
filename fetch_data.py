@@ -507,6 +507,36 @@ with open("player_history.json", "w", encoding="utf-8") as f:
 ph_size = os.path.getsize("player_history.json") / 1024
 print(f"  player_history.json written ({ph_size:.0f} KB, {len(ph_players)} players tracked)")
 
+# ── DAILY HISTORY ─────────────────────────────────────────────────────────────
+# Keeps one entry per day with tile counts per player.
+# Grows indefinitely but stays compact (~5-10 KB/month).
+# Format: {"days": [{"date": "YYYY-MM-DD", "players": {"pid": count}}, ...]}
+DAILY_HISTORY_FILE = "player_history_daily.json"
+today_str = now_utc.strftime("%Y-%m-%d")
+
+try:
+    daily = json.loads(open(DAILY_HISTORY_FILE, encoding="utf-8").read())
+except Exception:
+    daily = {"days": []}
+
+# Build today's snapshot: {pid: tile_count} for all current players
+today_counts = {p["pid"]: p["tiles"] for p in player_list}
+
+# Replace or append today's entry
+days = daily.get("days", [])
+if days and days[-1]["date"] == today_str:
+    days[-1]["players"] = today_counts  # update existing entry for today
+else:
+    days.append({"date": today_str, "players": today_counts})
+
+daily = {"updated": now_utc.isoformat(), "days": days}
+
+with open(DAILY_HISTORY_FILE, "w", encoding="utf-8") as f:
+    json.dump(daily, f, separators=(",", ":"), ensure_ascii=False)
+
+dh_size = os.path.getsize(DAILY_HISTORY_FILE) / 1024
+print(f"  player_history_daily.json updated ({len(days)} days, {dh_size:.0f} KB)")
+
 # ── RAID TRACKING ──────────────────────────────────────────────────────────────
 # Fetches recent RaidBattleEvent events from the SUI blockchain.
 # Keeps the last MAX_RAIDS entries in raids.json, deduplicated by tx digest.

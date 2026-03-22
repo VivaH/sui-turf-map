@@ -3053,6 +3053,7 @@ function updateZoomIndicator(){
 // ── PLAYER HISTORY ────────────────────────────────────────────────────────────
 let playerHistory = null;
 let playerHistoryLoaded = false;
+let playerHistoryDaily = null; // long-term daily data
 let playerActivity = null; // {pid: days_since_last_active}
 
 async function loadPlayerHistory(){
@@ -3060,6 +3061,11 @@ async function loadPlayerHistory(){
     const r = await fetch('player_history.json?t='+Date.now());
     if(r.ok) playerHistory = await r.json();
   }catch(e){ /* no history data available */ }
+  // Also load daily history for long-term chart
+  try{
+    const r2 = await fetch('player_history_daily.json?t='+Date.now());
+    if(r2.ok) playerHistoryDaily = await r2.json();
+  }catch(e){}
   playerHistoryLoaded = true;
 }
 
@@ -3073,18 +3079,32 @@ async function loadPlayerActivity(){
 function renderGarrisonHistory(){
   const el = document.getElementById('gar-history-chart');
   if(!garrisonPid){ el.innerHTML='<div id="gar-history-empty">No player selected.</div>'; return; }
-  if(!playerHistory){
+  if(!playerHistory && !playerHistoryDaily){
     el.innerHTML=playerHistoryLoaded
       ?'<div id="gar-history-empty">No history data available for this player.<br>Will appear after next data refresh.</div>'
       :'<div id="gar-history-empty">Loading history data...</div>';
     return;
   }
-  const counts = playerHistory.players?.[garrisonPid];
+
+  // Build counts + labels from snapshot history
+  let counts = playerHistory?.players?.[garrisonPid]?.filter(v=>v!=null) || [];
+  let labels  = playerHistory?.snapshots || [];
+
+  // Try daily history — use if it covers more days
+  const dailyDays = playerHistoryDaily?.days || [];
+  if(dailyDays.length > counts.length){
+    const dailyCounts = dailyDays.map(d => d.players?.[garrisonPid] ?? null).filter(v=>v!=null);
+    const dailyLabels = dailyDays.filter(d => d.players?.[garrisonPid] != null).map(d => d.date);
+    if(dailyCounts.length >= counts.length){
+      counts = dailyCounts;
+      labels  = dailyLabels;
+    }
+  }
+
   if(!counts||counts.length<2){
     el.innerHTML='<div id="gar-history-empty">Not enough history for this player.</div>';
     return;
   }
-  const labels = playerHistory.snapshots||[];
   const W=460, H=160, PAD={t:16,r:20,b:36,l:48};
   const cW=W-PAD.l-PAD.r, cH=H-PAD.t-PAD.b;
   const maxV=Math.max(...counts), minV=Math.min(...counts);
