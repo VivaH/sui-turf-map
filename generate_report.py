@@ -209,6 +209,28 @@ if not api_key:
     print("ERROR: ANTHROPIC_API_KEY not set.")
     sys.exit(1)
 
+# Load previous report text for continuity
+REPORT_FILE = "weekly_report.json"
+prev_report_text = ""
+try:
+    with open(REPORT_FILE, encoding="utf-8") as f:
+        prev_report = json.load(f)
+    prev_html = prev_report.get("html", "")
+    if prev_html:
+        # Strip HTML tags to get plain text for the prompt
+        import re as _re
+        prev_report_text = _re.sub(r'<[^>]+>', ' ', prev_html)
+        prev_report_text = _re.sub(r'\s+', ' ', prev_report_text).strip()
+        prev_report_text = prev_report_text[:3000]  # cap at 3000 chars to control cost
+        print(f"  Previous report loaded ({len(prev_report_text)} chars)")
+except Exception:
+    print("  No previous report found — writing first edition")
+
+prev_context = f"""
+PREVIOUS EDITION (last week's article — use this for narrative continuity, reference ongoing storylines, feuds and power shifts, but do NOT repeat the same events):
+{prev_report_text}
+""" if prev_report_text else ""
+
 prompt = f"""You are the editor of THE VENDETTA GAZETTE, a sensationalist criminal underworld newspaper written in the style of the 1920s Roaring Twenties. Write a dramatic, entertaining front-page newspaper article based on the following weekly statistics from the criminal territory wars of Vendetta City.
 
 Rules:
@@ -218,10 +240,11 @@ Rules:
 - Cover the top stories: biggest territorial gains, dramatic HQ raids, rising newcomers, fallen bosses
 - Include a "SPECIAL BULLETIN" sidebar for the most dramatic HQ capture of the week if one occurred
 - End with a short "POLICE BLOTTER" section with 2–3 humorous one-liners about minor incidents
+- If a previous edition is provided, weave in narrative continuity — reference ongoing feuds, power shifts or characters from last week where relevant. The reader should feel this is an ongoing serial.
 - Output clean HTML only — no markdown, no code fences, no explanatory text outside the article
 - Use these HTML elements for structure: <h1> for the newspaper name, <h2> for the date/edition line, <h3> for article headlines, <p> for body text, <blockquote> for sidebar/bulletin, <hr> for section dividers, <em> and <strong> for emphasis
 - Keep the total length to roughly 600–900 words of body text
-
+{prev_context}
 WEEKLY STATISTICS:
 {stats_text}
 """
