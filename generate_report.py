@@ -132,6 +132,10 @@ for r in week_raids:
     victim_count[name] = victim_count.get(name, 0) + 1
 top_victims = sorted(victim_count.items(), key=lambda x: -x[1])[:5]
 
+# Separate pure raids from raids-that-were-also-captures
+capture_raids  = [r for r in week_raids if r.get("is_capture")]
+pure_raids     = [r for r in week_raids if not r.get("is_capture")]
+
 # Total loot this week
 total_cash    = sum(r.get("cash", 0)    for r in week_raids)
 total_weapons = sum(r.get("weapons", 0) for r in week_raids)
@@ -152,6 +156,8 @@ def fmt_list(items, key_name="name", val_name="net", prefix="+"):
 
 raid_section = f"""
 RAIDS THIS WEEK: {len(week_raids)} total
+- Of which also resulted in a turf capture: {len(capture_raids)}
+- Pure plunder raids (no capture):          {len(pure_raids)}
 - Total cash looted:    {total_cash:,.2f}
 - Total weapons looted: {total_weapons:,.2f}
 - Total XP looted:      {total_xp:,.2f}
@@ -449,6 +455,8 @@ report = {
         "total_tiles_end":   total_new,
         "hq_captures":       len(week_captures),
         "raids":             len(week_raids),
+        "raids_with_capture": len(capture_raids),
+        "pure_raids":        len(pure_raids),
         "total_cash_looted": round(total_cash, 2),
         "newcomers":         len(newcomers),
         "vanished":          len(vanished),

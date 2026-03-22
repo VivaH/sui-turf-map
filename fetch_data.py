@@ -571,27 +571,39 @@ known_digests = {r["digest"] for r in existing_raids if r.get("digest")}
 RAID_SEARCH_TYPE = "0x63081c5dd824a49289b6557d9f9bcf8613fe801e89dbad728616348a58b4b40a::ibattle::SimulationResultEvent"
 SCALE = 18446744073709551616  # 2^64
 
-needs_xp = [r for r in existing_raids if r.get("xp", 0) == 0 and r.get("digest")]
-if needs_xp:
-    print(f"  Backfilling XP for {len(needs_xp)} entries...")
-    backfilled = 0
-    for r in needs_xp:
+needs_backfill = [
+    r for r in existing_raids
+    if (r.get("xp", 0) == 0 or "is_capture" not in r) and r.get("digest")
+]
+if needs_backfill:
+    print(f"  Backfilling XP/capture flag for {len(needs_backfill)} entries...")
+    backfilled_xp = 0
+    backfilled_cap = 0
+    for r in needs_backfill:
         try:
             tx = rpc("sui_getTransactionBlock", [r["digest"], {"showEvents": True}])
             for ev in (tx.get("events") or []):
-                if ev.get("type") == RAID_SEARCH_TYPE:
+                ev_type = ev.get("type", "")
+                # XP from SimulationResultEvent
+                if ev_type == RAID_SEARCH_TYPE and r.get("xp", 0) == 0:
                     parsed = ev.get("parsedJson") or {}
                     res    = parsed.get("raided_resources") or {}
                     raw_xp = int(res.get("xp", 0) or 0)
                     if raw_xp > 0:
                         r["xp"] = raw_xp / SCALE
-                        backfilled += 1
-                    break
+                        backfilled_xp += 1
+                # Capture detection — any CaptureEvent in same TX
+                if "CaptureEvent" in ev_type and "is_capture" not in r:
+                    r["is_capture"] = True
+                    backfilled_cap += 1
+            # Mark as checked even if no capture found
+            if "is_capture" not in r:
+                r["is_capture"] = False
             time.sleep(DELAY)
         except Exception as e:
             print(f"    Warning: backfill failed for {r['digest'][:16]}: {e}")
             continue
-    print(f"  XP backfilled for {backfilled} entries")
+    print(f"  XP backfilled: {backfilled_xp}, captures detected: {backfilled_cap}")
 
 def parse_raid_event(ev):
     """Extract raid fields from a raw SUI event dict."""
@@ -626,6 +638,7 @@ def parse_raid_event(ev):
         "cash":           cash,
         "weapons":        weapons,
         "xp":             xp,
+        "is_capture":     False,   # will be set True if CaptureEvent found in same TX
         "timestamp":      ts,
     }
 
