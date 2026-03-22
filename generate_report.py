@@ -461,3 +461,43 @@ with open(REPORT_FILE, "w", encoding="utf-8") as f:
     json.dump(report, f, separators=(",", ":"), ensure_ascii=False)
 
 print(f"Report saved to {REPORT_FILE}")
+
+# ── EXPORT PDF ARCHIVE ────────────────────────────────────────────────────────
+# Saves a dated PDF to reports/ for permanent archive
+try:
+    from weasyprint import HTML as WeasyHTML
+
+    os.makedirs("reports", exist_ok=True)
+    pdf_date   = now_utc.strftime("%Y-%m-%d")
+    pdf_path   = f"reports/weekly_report_{pdf_date}.pdf"
+
+    # Wrap article_html in a full HTML page with print-friendly styling
+    pdf_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body{{margin:0;padding:24px 32px;background:#fff;color:#111;
+        font-family:'Georgia',serif;font-size:13px;line-height:1.7}}
+  h1{{font-size:28px;text-align:center;margin-bottom:4px}}
+  h2{{font-size:14px;text-align:center;color:#555;margin-top:0}}
+  h3{{font-size:16px;margin-top:24px}}
+  blockquote{{border-left:3px solid #999;padding:8px 16px;margin:16px 0;
+              background:#f9f9f9;color:#444}}
+  hr{{border:none;border-top:1px solid #ccc;margin:20px 0}}
+  svg{{max-width:100%;height:auto;display:block;margin:12px auto}}
+</style>
+</head>
+<body>
+{article_html}
+</body>
+</html>"""
+
+    WeasyHTML(string=pdf_html).write_pdf(pdf_path)
+    pdf_size = os.path.getsize(pdf_path) / 1024
+    print(f"PDF saved to {pdf_path} ({pdf_size:.0f} KB)")
+
+except ImportError:
+    print("WeasyPrint not installed — skipping PDF export")
+except Exception as e:
+    print(f"Warning: PDF export failed: {e}")
