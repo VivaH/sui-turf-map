@@ -261,6 +261,23 @@ PREVIOUS EDITION (last week's article — use this for narrative continuity, ref
 
 prompt = f"""You are the editor of THE VENDETTA GAZETTE, a sensationalist criminal underworld newspaper written in the style of the 1920s Roaring Twenties. Write a dramatic, entertaining front-page newspaper article based on the following weekly statistics from the criminal territory wars of Vendetta City.
 
+GAME MECHANICS KNOWLEDGE (use this to write accurate, flavourful stories):
+- Players build criminal empires by capturing turfs (tiles on a map) and defending them with gangsters
+- Three gangster types: Henchmen (weakest), Bouncers (medium), Enforcers (strongest)
+- Attacking: a player selects gangsters and chooses Raid, Capture, or both
+  * Raid = steal cash, weapons and XP from the defender (~11% of stored resources, max 500 cash/weapons)
+  * Capture = take ownership of the tile
+- An attacker NEVER loses their own turfs by attacking, but CAN lose gangsters in the fight
+- HQ (Headquarters): every player has one special tile as their base
+  * 0–10 defenders: normal fight, attacker can capture the HQ tile. The previous owner gets another turf promoted to new HQ — unless it was their last turf, in which case they are eliminated. Eliminated players keep their XP and some resources for a fresh start.
+  * 11+ defenders: the game randomly picks 10 to fight. Even if the attacker wins the battle, the tile is NOT captured — the HQ stands. This is a "HQ Destroyed" event.
+- Cooldowns after an attack:
+  * Capture Shield: 1 hour (tile cannot be captured again)
+  * Raid Protection: 2 hours (tile cannot be raided again)
+  * After an HQ attack: 6 hours raid protection
+- Ghost turfs: abandoned tiles with little or no garrison — easy targets for expansion
+- The leaderboard ranks players by number of turfs held
+
 Rules:
 - Write in authentic 1920s newspaper prose: florid, dramatic, with colourful nicknames and underworld slang
 - Use real player names from the data as criminal bosses, gang leaders and mob figures
