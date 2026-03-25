@@ -343,6 +343,9 @@ body.map-only #analyse-btn{display:none!important}
 #gar-raids-list{max-height:60vh;overflow-y:auto}
 #gar-raids-list::-webkit-scrollbar{width:3px}
 #gar-raids-list::-webkit-scrollbar-thumb{background:#333}
+#gar-attack-content{max-height:60vh;overflow-y:auto}
+#gar-attack-content::-webkit-scrollbar{width:3px}
+#gar-attack-content::-webkit-scrollbar-thumb{background:#333}
 .gar-raid-row{padding:7px 18px;border-bottom:1px solid #0f0f0f;font-size:11px;font-family:var(--font-mono);line-height:1.6}
 .gar-raid-row.as-attacker{border-left:3px solid #ff8483}
 .gar-raid-row.as-defender{border-left:3px solid #89c6ff}
@@ -467,7 +470,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 
 <div id="toolbar">
 <div id="toolbar-scroll">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.12</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.13</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh</button>
   <div class="sep"></div>
@@ -617,6 +620,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
       <button class="gar-tab" id="tab-btn-recall" onclick="switchGarrisonTab('recall')">⬆ Recall</button>
       <button class="gar-tab" id="tab-btn-history" onclick="switchGarrisonTab('history')">📈 History</button>
       <button class="gar-tab" id="tab-btn-raids" onclick="switchGarrisonTab('raids')">🗡 Raids</button>
+      <button class="gar-tab" id="tab-btn-attack" onclick="switchGarrisonTab('attack')">⚔ Attack</button>
     </div>
 
     <!-- Tab 1: Navigate -->
@@ -658,6 +662,11 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
     <!-- Tab 4: Raids -->
     <div id="garrison-tab-raids">
       <div id="gar-raids-list"></div>
+    </div>
+
+    <!-- Tab 5: Attack Advisor -->
+    <div id="garrison-tab-attack">
+      <div id="gar-attack-content" style="padding:14px 18px;"></div>
     </div>
   </div>
 </div>
@@ -970,6 +979,7 @@ async function loadData(url){
     } else {
       jumpToMe();
     }
+    _ATK_CACHE.clear();
     drawMap();drawMinimap();
 
     if(!isLive){
@@ -2604,12 +2614,13 @@ let garrisonRows = []; // [{tile, selected}]
 let garrisonAllTiles = []; // all tiles for navigate tab (incl HQ)
 
 function switchGarrisonTab(tab){
-  ['navigate','recall','history','raids'].forEach(t=>{
+  ['navigate','recall','history','raids','attack'].forEach(t=>{
     document.getElementById(`garrison-tab-${t}`).classList.toggle('active', t===tab);
     document.getElementById(`tab-btn-${t}`).classList.toggle('active', t===tab);
   });
   if(tab==='history') renderGarrisonHistory();
   if(tab==='raids')   renderGarrisonRaids();
+  if(tab==='attack')  renderAttackAdvisor();
 }
 
 function openGarrison(pid, e){
@@ -3298,6 +3309,157 @@ function renderGarrisonRaids(){
     </div>`;
   }).join('');
 }
+// ── ATTACK ADVISOR ─────────────────────────────────────────────────────────────
+// Monte Carlo battle simulator based on confirmed on-chain damage tables
+const _ATK_DMG = {
+  HM: { HM:[2,4,4,4,8,8],  BC:[1,2,2,2,4,4],   EF:[2,4,4,4,8,8]  },
+  BC: { HM:[2,5,5,5,10,10], BC:[2,5,5,5,10,10], EF:[1,2,2,2,5,5]  },
+  EF: { HM:[3,7,7,7,14,14], BC:[4,10,10,10,21,21], EF:[3,7,7,7,14,14] }
+};
+const _ATK_HP = { HM:9, BC:12, EF:10 };
+const _ATK_CACHE = new Map();
+
+function _atkSim(atkArmy, defArmy, N=2000){
+  let wins=0, totalRounds=0, totalSurv=0;
+  const defLen=defArmy.length;
+  const atkLen=atkArmy.length;
+  for(let n=0;n<N;n++){
+    // shuffle attacker
+    const atk=atkArmy.slice(); for(let i=atk.length-1;i>0;i--){const j=Math.random()*i+1|0;[atk[i],atk[j]]=[atk[j],atk[i]];}
+    const df=defArmy.slice();  for(let i=df.length-1;i>0;i--){const j=Math.random()*i+1|0;[df[i],df[j]]=[df[j],df[i]];}
+    const ahp=atk.map(t=>_ATK_HP[t]);
+    const dhp=df.map(t=>_ATK_HP[t]);
+    let ai=0,di=0,rounds=0;
+    while(ai<atkLen&&di<defLen){
+      rounds++;
+      const ar=Math.random()*6|0, dr=Math.random()*6|0;
+      ahp[ai]-=_ATK_DMG[df[di]][atk[ai]][dr];
+      dhp[di]-=_ATK_DMG[atk[ai]][df[di]][ar];
+      if(dhp[di]<=0)di++;
+      if(ahp[ai]<=0)ai++;
+    }
+    totalRounds+=rounds;
+    if(di>=defLen&&ai<atkLen){ wins++; totalSurv+=(atkLen-ai); }
+  }
+  return { winPct:wins/N*100, avgRounds:totalRounds/N, avgSurv:wins>0?totalSurv/wins:0 };
+}
+
+function _genCompositions(maxUnits=10){
+  const comps=[];
+  for(let total=1;total<=maxUnits;total++){
+    for(let e=0;e<=total;e++){
+      for(let b=0;b<=total-e;b++){
+        const h=total-e-b;
+        comps.push({EF:e,BC:b,HM:h,total});
+      }
+    }
+  }
+  return comps;
+}
+const _ALL_COMPS = _genCompositions(10);
+
+function _armyArray(obj){ // {EF,BC,HM} → flat array
+  return [].concat(
+    Array(obj.EF||0).fill('EF'),
+    Array(obj.BC||0).fill('BC'),
+    Array(obj.HM||0).fill('HM')
+  );
+}
+
+function _compKey(obj){ return `${obj.EF}e${obj.BC}b${obj.HM}h`; }
+
+function renderAttackAdvisor(){
+  const el=document.getElementById('gar-attack-content');
+  if(!garrisonPid){
+    el.innerHTML='<div style="color:#444;font-size:11px;font-family:var(--font-mono)">No player selected.</div>';
+    return;
+  }
+
+  // Collect garrison across all tiles (except HQ which can't normally be raided first)
+  const playerTiles = tiles.filter(t=>t.pid===garrisonPid);
+
+  if(!playerTiles.length){
+    el.innerHTML='<div style="color:#444;font-size:11px;font-family:var(--font-mono)">No tiles found for this player.</div>';
+    return;
+  }
+
+  // Build per-tile results
+  const tileResults = playerTiles
+    .filter(t=> (t.gE||0)+(t.gB||0)+(t.gH||0) > 0 || t.isHQ)
+    .sort((a,b)=> b.isHQ-a.isHQ || (b.gE+b.gB+b.gH)-(a.gE+a.gB+a.gH));
+
+  if(!tileResults.length){
+    el.innerHTML='<div style="color:#444;font-size:11px;font-family:var(--font-mono)">No garrisoned tiles — any army wins.</div>';
+    return;
+  }
+
+  el.innerHTML=`<div style="color:#555;font-size:10px;font-family:var(--font-mono);margin-bottom:12px">Calculating best attack per tile…</div>`;
+
+  // Run async so UI renders first
+  setTimeout(()=>{
+    const rows = tileResults.map(t=>{
+      const defObj={EF:t.gE||0,BC:t.gB||0,HM:t.gH||0};
+      const defTotal=defObj.EF+defObj.BC+defObj.HM;
+      const defArray=_armyArray(defObj);
+      const cacheKey=`${_compKey(defObj)}`;
+
+      let best, top3;
+      if(_ATK_CACHE.has(cacheKey)){
+        ({best,top3}=_ATK_CACHE.get(cacheKey));
+      } else {
+        // Quick sweep: 500 sims per composition
+        const scored=_ALL_COMPS.map(comp=>{
+          const atkArr=_armyArray(comp);
+          const r=_atkSim(atkArr,defArray,500);
+          return {...comp,...r};
+        }).sort((a,b)=>b.winPct-a.winPct||(a.total-b.total)||(a.avgRounds-b.avgRounds));
+
+        // Refine top 5 with 3000 sims
+        const refined=scored.slice(0,5).map(comp=>{
+          const atkArr=_armyArray(comp);
+          const r=_atkSim(atkArr,defArray,3000);
+          return {...comp,...r};
+        }).sort((a,b)=>b.winPct-a.winPct||(a.total-b.total)||(a.avgRounds-b.avgRounds));
+
+        best=refined[0];
+        top3=refined.slice(0,3);
+        _ATK_CACHE.set(cacheKey,{best,top3});
+      }
+
+      const gasWarn = best.avgRounds>16;
+      const hqBadge = t.isHQ?`<span style="background:#6B1A1A;color:#FAC775;font-size:8px;padding:1px 4px;border-radius:2px;margin-left:4px">HQ</span>`:'';
+      const defLabel = [defObj.EF?`<span style="color:#ff8483">${defObj.EF}E</span>`:'', defObj.BC?`<span style="color:#6fffa9">${defObj.BC}B</span>`:'', defObj.HM?`<span style="color:#aaa">${defObj.HM}H</span>`:''].filter(Boolean).join(' ');
+
+      const top3html=top3.map((c,i)=>{
+        const atkLabel=[c.EF?`<span style="color:#ff8483">${c.EF}×EF</span>`:'',c.BC?`<span style="color:#6fffa9">${c.BC}×BC</span>`:'',c.HM?`<span style="color:#aaa">${c.HM}×HM</span>`:''].filter(Boolean).join(' ');
+        const roundsColor=c.avgRounds>16?'#E24B4A':c.avgRounds>12?'#FAC775':'#6fffa9';
+        const gasIcon=c.avgRounds>16?'⚠ ':'';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #0f0f0f">
+          <div style="font-size:11px">${i===0?'<span style="color:#FAC775">★</span> ':'  '}${atkLabel} <span style="color:#555;font-size:10px">(${c.total})</span></div>
+          <div style="text-align:right;font-size:10px;font-family:var(--font-mono)">
+            <span style="color:${c.winPct>=80?'#6fffa9':c.winPct>=50?'#FAC775':'#E24B4A'}">${c.winPct.toFixed(0)}%</span>
+            <span style="color:${roundsColor};margin-left:8px">${gasIcon}~${c.avgRounds.toFixed(0)} rnd</span>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div style="background:#0d0d14;border:1px solid #1a1a2a;border-radius:4px;padding:10px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;font-family:var(--font-mono);color:#aaa">(${t.x}, ${t.y})${hqBadge}</span>
+          <span style="font-size:11px">Def: ${defLabel} <span style="color:#555">(${defTotal})</span></span>
+        </div>
+        ${top3html}
+        ${gasWarn?`<div style="margin-top:6px;font-size:9px;color:#E24B4A;font-family:var(--font-mono)">⚠ Best option averages ${best.avgRounds.toFixed(0)} rounds — risk of gas failure on-chain</div>`:''}
+      </div>`;
+    }).join('');
+
+    el.innerHTML=`
+      <div style="font-size:9px;color:#444;font-family:var(--font-mono);margin-bottom:10px">Best attack per garrisoned tile · ★ = top pick · ⚠ = gas risk (>16 rounds)</div>
+      ${rows}
+    `;
+  }, 30);
+}
+
 let ghostMode = false;
 let ghostTiles = []; // [{x,y,pid,name,dist}] closest ghost turfs
 let _ghostRaf = 0;   // dedicated rAF handle for ghost pulse animation
