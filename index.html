@@ -467,7 +467,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 
 <div id="toolbar">
 <div id="toolbar-scroll">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.11</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#555;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.12</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh</button>
   <div class="sep"></div>
@@ -928,6 +928,9 @@ async function loadData(url){
 
   tiles=[]; tileMap.clear(); players=[]; filteredPlayers=[]; neighborMap.clear();
   clearRoute();
+  // Invalidate per-frame caches
+  drawMap._labelSig=''; drawMap._labels=[];
+  updateRuler._last='';
 
   try{
     const resp=await fetch(url+'?t='+Date.now());
@@ -1189,6 +1192,12 @@ function resizeCanvas(){
   cv.width=wrap.clientWidth;cv.height=wrap.clientHeight;
   _mapCv=cv; _mapCtx=cv.getContext('2d');
   _mmCv=document.getElementById('minimap-canvas');
+  // Size minimap canvas once (not every draw — assignment clears + reallocates buffer)
+  const mmRect=_mmCv.getBoundingClientRect();
+  if(mmRect.width>0&&mmRect.height>0){
+    _mmCv.width=Math.round(mmRect.width);
+    _mmCv.height=Math.round(mmRect.height);
+  }
 }
 window.addEventListener('resize',()=>{resizeCanvas();drawMap();drawMinimap();});
 function worldToScreen(wx,wy){return{sx:(wx-minX)*CELL*zoom+panX,sy:(maxY-wy)*CELL*zoom+panY};}
@@ -1226,23 +1235,29 @@ function drawMap(){
   const wx1=Math.ceil((W-panX)/(CELL*zoom))+minX+1;
   const wy0=Math.floor(maxY-(H-panY)/(CELL*zoom))-1;
   const wy1=Math.ceil(maxY-(-panY)/(CELL*zoom))+1;
+  const _hasRoute=!!routePathMap;
   for(const t of tiles){
     if(t.x<wx0||t.x>wx1||t.y<wy0||t.y>wy1) continue;
     const sx=(t.x-minX)*cs+panX,sy=(maxY-t.y)*cs+panY;
-    const key=`${t.x},${t.y}`;
     let col;
-    if(routePathMap&&routePathMap.has(key)){
-      const type=routePathMap.get(key);
-      col=type==='own'?'#7F77DD':type==='conquer'?'#E24B4A':type==='target'?'#1D9E75':t.color;
-    } else if(highlightPid&&t.pid===highlightPid){col='#ffe066';}
-    else if(t.isHQ){col=t.isMe?'#533AB7':(getMark(t.pid)==='friend'?'#0a5f40':getMark(t.pid)==='enemy'?'#5f0a0a':'#6B1A1A');}
-    else{
-      const p=players[t.pidIdx];
-      if(top10Mode&&!top10Pids.has(t.pid)){col='#2a2a2a';}
-      else if(p&&p.inactive){col='#2a2a2a';}
-      else{col=markColor(t.pid,t.color);}
+    if(_hasRoute){
+      const key=`${t.x},${t.y}`;
+      if(routePathMap.has(key)){
+        const type=routePathMap.get(key);
+        col=type==='own'?'#7F77DD':type==='conquer'?'#E24B4A':type==='target'?'#1D9E75':t.color;
+      }
+      if(!col&&routePath) ctx.globalAlpha=0.35;
     }
-    if(routePath&&routePathMap&&!routePathMap.has(key)) ctx.globalAlpha=0.35;
+    if(!col){
+      if(highlightPid&&t.pid===highlightPid){col='#ffe066';}
+      else if(t.isHQ){col=t.isMe?'#533AB7':(getMark(t.pid)==='friend'?'#0a5f40':getMark(t.pid)==='enemy'?'#5f0a0a':'#6B1A1A');}
+      else{
+        const p=players[t.pidIdx];
+        if(top10Mode&&!top10Pids.has(t.pid)){col='#2a2a2a';}
+        else if(p&&p.inactive){col='#2a2a2a';}
+        else{col=markColor(t.pid,t.color);}
+      }
+    }
 
     // 6. Zoom-dependent rendering: at very low zoom draw bounding-box fill per player
     // (handled below via aggregate pass — individual tiles still drawn here for correctness)
@@ -1294,38 +1309,46 @@ function drawMap(){
     const nameFs=Math.max(9,Math.min(14,cs*0.55));
     ctx.font=`bold ${nameFs}px "Martian Mono",monospace`;
     ctx.textAlign='center';ctx.textBaseline='middle';
-    // Group visible tiles by pid → compute centroid
-    const pidGroups=new Map();
-    for(const t of tiles){
-      if(t.x<wx0||t.x>wx1||t.y<wy0||t.y>wy1) continue;
-      if(!pidGroups.has(t.pid)) pidGroups.set(t.pid,{sx:0,sy:0,n:0,col:t.color,me:t.isMe});
-      const g=pidGroups.get(t.pid);
-      g.sx+=(t.x-minX)*cs+panX+cs/2;
-      g.sy+=(maxY-t.y)*cs+panY+cs/2;
-      g.n++;
+    // Cache label data: recompute only when viewport changes significantly
+    const _lsig=`${wx0>>1}|${wx1>>1}|${wy0>>1}|${wy1>>1}|${cs.toFixed(0)}`;
+    if(_lsig!==drawMap._labelSig){
+      drawMap._labelSig=_lsig;
+      const pidGroups=new Map();
+      for(const t of tiles){
+        if(t.x<wx0||t.x>wx1||t.y<wy0||t.y>wy1) continue;
+        if(!pidGroups.has(t.pid)) pidGroups.set(t.pid,{wx:0,wy:0,n:0,col:t.color,me:t.isMe});
+        const g=pidGroups.get(t.pid);
+        g.wx+=t.x; g.wy+=t.y; g.n++;
+      }
+      drawMap._labels=[];
+      for(const [pid,g] of pidGroups){
+        if(g.n<8) continue;
+        const p=players[players._pidIdx?players._pidIdx.get(pid):players.findIndex(pl=>pl.pid===pid)];
+        if(!p||!p.name) continue;
+        if(top10Mode&&!top10Pids.has(pid)) continue;
+        const lbl=p.name.length>16?p.name.slice(0,15)+'…':p.name;
+        drawMap._labels.push({wx:g.wx/g.n,wy:g.wy/g.n,lbl,me:g.me});
+      }
     }
-    for(const [pid,g] of pidGroups){
-      if(g.n<8) continue;
-      const p=players.find(pl=>pl.pid===pid);
-      if(!p||!p.name) continue;
-      if(top10Mode&&!top10Pids.has(pid)) continue;
-      const cx=g.sx/g.n, cy=g.sy/g.n;
+    for(const lb of drawMap._labels||[]){
+      const cx=(lb.wx-minX)*cs+panX+cs/2, cy=(maxY-lb.wy)*cs+panY+cs/2;
       if(cx<0||cx>W||cy<0||cy>H) continue;
-      const lbl=p.name.length>16?p.name.slice(0,15)+'…':p.name;
-      const tw=ctx.measureText(lbl).width;
+      const tw=ctx.measureText(lb.lbl).width;
       const pad=3;
       ctx.fillStyle='rgba(0,0,0,0.55)';
       ctx.fillRect(cx-tw/2-pad,cy-nameFs/2-pad,tw+pad*2,nameFs+pad*2);
-      ctx.fillStyle=g.me?'#FAC775':'rgba(255,255,255,0.85)';
-      ctx.fillText(lbl,cx,cy);
+      ctx.fillStyle=lb.me?'#FAC775':'rgba(255,255,255,0.85)';
+      ctx.fillText(lb.lbl,cx,cy);
     }
   }
   // Grid drawn after tiles — visible on black background, zoom > 0.5
   if(zoom>0.5){
     const gridAlpha=Math.min(0.9, (zoom-0.5)*0.6);
     ctx.strokeStyle=`rgba(100,100,120,${gridAlpha})`;ctx.lineWidth=0.5;
-    for(let x=Math.max(minX,wx0);x<=Math.min(maxX+1,wx1);x++){const sx=(x-minX)*cs+panX;ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,H);ctx.stroke();}
-    for(let y=Math.max(minY,wy0);y<=Math.min(maxY+1,wy1);y++){const sy=(maxY-y)*cs+panY;ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(W,sy);ctx.stroke();}
+    ctx.beginPath();
+    for(let x=Math.max(minX,wx0);x<=Math.min(maxX+1,wx1);x++){const sx=(x-minX)*cs+panX;ctx.moveTo(sx,0);ctx.lineTo(sx,H);}
+    for(let y=Math.max(minY,wy0);y<=Math.min(maxY+1,wy1);y++){const sy=(maxY-y)*cs+panY;ctx.moveTo(0,sy);ctx.lineTo(W,sy);}
+    ctx.stroke();
   }
   if(routePath&&cs>=2){
     for(const s of routePath){
@@ -1403,12 +1426,6 @@ function drawMap(){
 
 function drawMinimap(){
   const mc=_mmCv||document.getElementById('minimap-canvas');
-  // Sync canvas pixel size to CSS display size
-  const rect=mc.getBoundingClientRect();
-  if(rect.width>0&&rect.height>0){
-    mc.width=Math.round(rect.width);
-    mc.height=Math.round(rect.height);
-  }
   const ctx=mc.getContext('2d');
   const MW=mc.width,MH=mc.height;
   ctx.fillStyle='#0a0a14';ctx.fillRect(0,0,MW,MH);
@@ -1416,14 +1433,17 @@ function drawMinimap(){
   const spanX=maxX-minX+1,spanY=maxY-minY+1;
   const sc=Math.min(MW/spanX,MH/spanY);
   const offX=(MW-spanX*sc)/2,offY=(MH-spanY*sc)/2;
+  const _mmHasRoute=!!routePathMap;
   for(const t of tiles){
-    const key=`${t.x},${t.y}`;
     let col;
     if(t.isHQ) col=t.isMe?'#FAC775':'#c8922a';
     else col=t.isMe?'#5b8fff':t.color;
-    if(routePathMap&&routePathMap.has(key)){
-      const type=routePathMap.get(key);
-      col=type==='own'?'#9d8fff':type==='conquer'?'#E24B4A':'#1D9E75';
+    if(_mmHasRoute){
+      const key=`${t.x},${t.y}`;
+      if(routePathMap.has(key)){
+        const type=routePathMap.get(key);
+        col=type==='own'?'#9d8fff':type==='conquer'?'#E24B4A':'#1D9E75';
+      }
     }
     ctx.fillStyle=col;
     ctx.fillRect(offX+(t.x-minX)*sc,offY+(maxY-t.y)*sc,Math.max(1,sc-0.2),Math.max(1,sc-0.2));
@@ -1443,7 +1463,7 @@ mapWrap.addEventListener('wheel',e=>{
   const mx=e.clientX-rect.left,my=e.clientY-rect.top;
   panX=mx-(mx-panX)*f;panY=my-(my-panY)*f;
   zoom=Math.max(0.05,Math.min(80,zoom*f));
-  drawMap();drawMinimap();
+  requestDraw();
 },{passive:false});
 
 mapWrap.addEventListener('mousedown',e=>{
@@ -1512,6 +1532,7 @@ const activePointers = new Map(); // identifier → {x, y}
 let _panStart   = null; // {panX, panY, x, y}   – saved state at 1-finger start
 let _pinchStart = null; // {midX, midY, dist, panX, panY, zoom} – saved at 2-finger start
 let _touchMoved = false;
+let _touchRect  = null; // cached getBoundingClientRect() for touch session
 let _longTimer  = null;
 let _tooltipTimer = null;
 
@@ -1543,7 +1564,8 @@ mapWrap.addEventListener('touchstart', e => {
   e.preventDefault();
   _touchActive=true;
 
-  const rect = mapWrap.getBoundingClientRect();
+  _touchRect = mapWrap.getBoundingClientRect();
+  const rect = _touchRect;
   for(const t of e.changedTouches) _syncPointer(t, rect);
 
   clearTimeout(_longTimer);
@@ -1581,7 +1603,7 @@ mapWrap.addEventListener('touchmove', e => {
   if(_isBtn(e.target)) return;
   e.preventDefault();
 
-  const rect = mapWrap.getBoundingClientRect();
+  const rect = _touchRect || mapWrap.getBoundingClientRect();
   for(const t of e.changedTouches) _syncPointer(t, rect);
 
   if(activePointers.size === 1 && _panStart){
@@ -1627,12 +1649,13 @@ function _handleTouchEnd(e){
   e.preventDefault();
   clearTimeout(_longTimer);
 
-  const rect = mapWrap.getBoundingClientRect();
+  const rect = _touchRect || mapWrap.getBoundingClientRect();
   for(const t of e.changedTouches) activePointers.delete(t.identifier);
 
   if(activePointers.size === 0){
     // ── All fingers lifted ──
     _touchActive=false;
+    _touchRect=null;
     flushMinimap();
     if(!_touchMoved && _panStart){
       // It was a tap — show tooltip or select route
@@ -3006,9 +3029,14 @@ document.getElementById('wallet-modal').addEventListener('click',e=>{
 // ── COORDINATE RULER ─────────────────────────────────────────────────────────
 function updateRuler(){
   if(!tiles.length) return;
-  const cv=document.getElementById('map');
+  const cv=_mapCv||document.getElementById('map');
   const W=cv.width, H=cv.height;
   const cs=CELL*zoom;
+
+  // Skip if view hasn't changed (innerHTML assignment forces layout)
+  const _sig=`${W}|${H}|${cs.toFixed(1)}|${panX|0}|${panY|0}`;
+  if(_sig===updateRuler._last) return;
+  updateRuler._last=_sig;
 
   // Decide tick spacing based on zoom
   const minPx=40; // minimum pixels between ticks
