@@ -845,6 +845,31 @@ for event_type in ACTIVITY_EVENT_TYPES:
         print(f"  Warning: {etype_short} failed: {e}")
         continue
 
+# Merge raid timestamps — most recent raid as attacker per player
+# raids.json already has all known raids; use attacker_pid + timestamp
+try:
+    all_raids_for_activity = json.loads(open(RAIDS_FILE, encoding="utf-8").read())
+    for r in all_raids_for_activity:
+        pid = r.get("attacker_pid","")
+        ts_iso = r.get("timestamp","")
+        if pid and ts_iso:
+            if pid not in latest_activity or ts_iso > latest_activity[pid]:
+                latest_activity[pid] = ts_iso
+    # Also check hq_destroyed.json for attacker activity
+    try:
+        all_hqd = json.loads(open(HQ_DESTROYED_FILE, encoding="utf-8").read())
+        for d in all_hqd:
+            pid = d.get("attacker_pid","")
+            ts_iso = d.get("timestamp","")
+            if pid and ts_iso:
+                if pid not in latest_activity or ts_iso > latest_activity[pid]:
+                    latest_activity[pid] = ts_iso
+    except Exception:
+        pass
+    print(f"  Merged raid/HQ timestamps into activity data")
+except Exception as e:
+    print(f"  Warning: could not merge raid timestamps: {e}")
+
 # Convert to days_since_last_active for current players only
 activity_days = {}
 for p in player_list:
