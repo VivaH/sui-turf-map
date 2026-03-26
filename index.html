@@ -460,7 +460,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 
 <div id="toolbar">
 <div id="toolbar-scroll">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#999;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.19</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:9px;color:#999;margin-right:4px;flex-shrink:0;font-family:var(--font-mono)">v3.20</span>
   <button class="primary" onclick="loadLatest()">↺ Reload</button>
   <button onclick="openRefreshModal()" style="border-color:#5a4a1e;color:var(--v-gold);background:#1a1200;box-shadow:2.5px 2.5px 0 #3a2a00">⚡ Refresh</button>
   <div class="sep"></div>
@@ -468,6 +468,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
   <span id="route-indicator">Click a tile or player to select A → B</span>
   <button id="battle-btn" onclick="toggleBattleHistory()" style="display:none">⚔ 24h</button>
   <button id="top10-btn" onclick="toggleTop10()">★ Top 10</button>
+  <button id="leaderboard-btn" onclick="openLeaderboard()">📈 Leaderboard</button>
   <div class="sep"></div>
   <button id="intel-btn" onclick="toggleIntelMenu()" disabled title="Select a player first">🔍 Intel ▾</button>
   <button onclick="toggleMoreMenu()" id="more-btn">⋯ More ▾</button>
@@ -653,6 +654,38 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
     <div id="garrison-tab-attack">
       <div id="gar-attack-content" style="padding:14px 18px;"></div>
     </div>
+  </div>
+</div>
+
+<!-- Leaderboard modal -->
+<div id="leaderboard-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:300;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:#111;border:2px solid #222;width:100%;max-width:560px;font-family:var(--font-mono)">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:2px solid #222;background:#0a0a0a">
+      <div>
+        <div style="font-family:var(--font-bangers);font-size:16px;color:var(--v-gold);letter-spacing:1px">📈 LEADERBOARD</div>
+        <div id="lb-subtitle" style="font-size:9px;color:#999;margin-top:2px">Rank trends vs 24h ago</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="lb-period-24h" onclick="lbSetPeriod('24h')" style="font-size:9px;padding:2px 8px;border-color:var(--v-gold);color:var(--v-gold)">24h</button>
+        <button id="lb-period-7d" onclick="lbSetPeriod('7d')" style="font-size:9px;padding:2px 8px">7d</button>
+        <button onclick="closeLeaderboard()" style="font-size:12px;padding:2px 8px">✕</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:32px 1fr 52px 52px 52px;padding:5px 14px;border-bottom:1px solid #1a1a1a;font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.4px">
+      <span>#</span><span>Player</span><span style="text-align:right">Turfs</span><span style="text-align:right">Change</span><span style="text-align:right">Trend</span>
+    </div>
+    <div id="lb-list" style="max-height:65vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Mini-profile modal -->
+<div id="miniprofile-modal" style="display:none;position:fixed;inset:0;z-index:310;pointer-events:none">
+  <div id="miniprofile-box" style="position:absolute;background:#111;border:2px solid #222;min-width:240px;max-width:280px;font-family:var(--font-mono);pointer-events:all;box-shadow:4px 4px 0 #000">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #222;background:#0a0a0a">
+      <span id="mp-name" style="font-family:var(--font-bangers);font-size:13px;color:var(--v-gold);letter-spacing:1px"></span>
+      <button onclick="closeMiniProfile()" style="font-size:11px;padding:0 6px;line-height:18px">✕</button>
+    </div>
+    <div id="mp-body" style="padding:10px 12px;font-size:10px;line-height:1.8"></div>
   </div>
 </div>
 
@@ -3192,13 +3225,202 @@ function toggleTop10(){
   const btn=document.getElementById('top10-btn');
   btn.classList.toggle('top10-active',top10Mode);
   if(top10Mode){
-    // Build set of top 10 pids by turf count
     top10Pids=new Set(players.slice(0,10).map(p=>p.pid));
-    // Add own pids always
     MY_IDS.forEach(id=>top10Pids.add(id));
   }
   drawMap();
 }
+
+// ── LEADERBOARD WITH TRENDS ────────────────────────────────────────────────────
+let _lbPeriod = '24h';
+
+function lbSetPeriod(p){
+  _lbPeriod = p;
+  document.getElementById('lb-period-24h').style.borderColor = p==='24h'?'var(--v-gold)':'#333';
+  document.getElementById('lb-period-24h').style.color       = p==='24h'?'var(--v-gold)':'#666';
+  document.getElementById('lb-period-7d').style.borderColor  = p==='7d'?'var(--v-gold)':'#333';
+  document.getElementById('lb-period-7d').style.color        = p==='7d'?'var(--v-gold)':'#666';
+  renderLeaderboard();
+}
+
+async function openLeaderboard(){
+  document.getElementById('leaderboard-modal').style.display='flex';
+  if(!playerHistoryLoaded) await loadPlayerHistory();
+  renderLeaderboard();
+}
+
+function closeLeaderboard(){
+  document.getElementById('leaderboard-modal').style.display='none';
+}
+
+function renderLeaderboard(){
+  const el=document.getElementById('lb-list');
+  el.innerHTML='<div style="padding:1rem;color:#666;font-size:11px">Loading...</div>';
+
+  // Build previous tile counts from history
+  // player_history.json: {snapshots:[{label,players:{pid:count}}]}
+  // player_history_daily.json: {entries:[{date,players:{pid:count}}]}
+  const now = Date.now();
+  const ms24 = 86400000;
+  const ms7d = 7*ms24;
+
+  let prevCounts = null; // {pid: count}
+
+  if(_lbPeriod==='24h' && playerHistory?.snapshots){
+    // Find snapshot closest to 24h ago
+    const target = now - ms24;
+    let best = null, bestDiff = Infinity;
+    for(const s of playerHistory.snapshots){
+      if(!s.players) continue;
+      // Try to parse label date — or use index-based estimation
+      const diff = Math.abs((s.ts||0)*1000 - target);
+      if(diff < bestDiff){ bestDiff=diff; best=s; }
+    }
+    // Fallback: use oldest available snapshot
+    if(!best) best = playerHistory.snapshots[playerHistory.snapshots.length-1];
+    if(best?.players) prevCounts = best.players;
+  } else if(_lbPeriod==='7d' && playerHistoryDaily?.entries){
+    const target = now - ms7d;
+    let best = null, bestDiff = Infinity;
+    for(const e of playerHistoryDaily.entries){
+      const ts = new Date(e.date).getTime();
+      const diff = Math.abs(ts - target);
+      if(diff < bestDiff){ bestDiff=diff; best=e; }
+    }
+    if(best?.players) prevCounts = best.players;
+  }
+
+  // Build current snapshot from players array (already loaded)
+  const top50 = players.slice(0, 50);
+
+  // Find previous rank for trend arrow
+  let prevRanked = [];
+  if(prevCounts){
+    prevRanked = Object.entries(prevCounts)
+      .sort((a,b)=>b[1]-a[1])
+      .map(([pid],i)=>({pid,rank:i+1}));
+  }
+  const prevRankMap = new Map(prevRanked.map(r=>[r.pid,r.rank]));
+
+  document.getElementById('lb-subtitle').textContent =
+    `Rank & tile trend vs ${_lbPeriod==='24h'?'24 hours':'7 days'} ago · top 50`;
+
+  el.innerHTML = top50.map((p,i)=>{
+    const rank = i+1;
+    const prevRank = prevRankMap.get(p.pid);
+    const prevTiles = prevCounts?.[p.pid] ?? null;
+    const tileDiff = prevTiles!=null ? p.tiles - prevTiles : null;
+
+    // Rank trend
+    let trendHtml = '<span style="color:#555">—</span>';
+    if(prevRank!=null){
+      const rd = prevRank - rank; // positive = moved up
+      if(rd>0)       trendHtml=`<span style="color:#6fffa9">▲${rd}</span>`;
+      else if(rd<0)  trendHtml=`<span style="color:#E24B4A">▼${Math.abs(rd)}</span>`;
+      else           trendHtml='<span style="color:#555">═</span>';
+    }
+
+    // Tile change
+    let changeHtml = '<span style="color:#555">—</span>';
+    if(tileDiff!=null){
+      if(tileDiff>0)      changeHtml=`<span style="color:#6fffa9">+${tileDiff}</span>`;
+      else if(tileDiff<0) changeHtml=`<span style="color:#E24B4A">${tileDiff}</span>`;
+      else                changeHtml='<span style="color:#555">0</span>';
+    }
+
+    const isMe = MY_IDS.has(p.pid);
+    const dotCol = markColor(p.pid, p.color||'#666');
+    const rankCol = rank<=3?'#FAC775':rank<=10?'#aaa':'#555';
+    const inactive = p.inactive?'<span style="color:#555;font-size:8px"> INACT</span>':'';
+
+    return `<div class="lb-row" onclick="closeMiniProfile();showMiniProfile(event,'${p.pid}')" style="display:grid;grid-template-columns:32px 1fr 52px 52px 52px;padding:6px 14px;border-bottom:1px solid #111;cursor:pointer;${isMe?'background:#0a0a1a':''}">
+      <span style="color:${rankCol};font-size:10px">${rank}</span>
+      <span style="display:flex;align-items:center;gap:6px">
+        <span style="width:8px;height:8px;border-radius:1px;background:${dotCol};flex-shrink:0;display:inline-block"></span>
+        <span style="font-size:11px;color:${isMe?'#FAC775':'#ccc'}">${esc(p.name||'[unknown]')}${inactive}</span>
+      </span>
+      <span style="text-align:right;font-size:11px;color:#aaa">${p.tiles}</span>
+      <span style="text-align:right;font-size:11px">${changeHtml}</span>
+      <span style="text-align:right;font-size:11px">${trendHtml}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── MINI-PROFILE ───────────────────────────────────────────────────────────────
+function showMiniProfile(e, pid){
+  const p = players.find(pl=>pl.pid===pid);
+  if(!p) return;
+
+  const modal = document.getElementById('miniprofile-modal');
+  const box   = document.getElementById('miniprofile-box');
+  modal.style.display='block';
+
+  // Position near click
+  const x = e.clientX, y = e.clientY;
+  const bw = 280, bh = 200;
+  const lx = (x+bw+10 > window.innerWidth)  ? x-bw-10 : x+10;
+  const ly = (y+bh+10 > window.innerHeight) ? y-bh-10 : y+10;
+  box.style.left=lx+'px'; box.style.top=ly+'px';
+
+  document.getElementById('mp-name').textContent = p.name||'[unknown]';
+
+  // Garrison totals for this player
+  const playerTiles = tiles.filter(t=>t.pid===pid);
+  const totalGar = playerTiles.reduce((s,t)=>s+(t.gH||0)+(t.gB||0)+(t.gE||0),0);
+  const totalH   = playerTiles.reduce((s,t)=>s+(t.gH||0),0);
+  const totalB   = playerTiles.reduce((s,t)=>s+(t.gB||0),0);
+  const totalE   = playerTiles.reduce((s,t)=>s+(t.gE||0),0);
+
+  // Rank
+  const rank = players.findIndex(pl=>pl.pid===pid)+1;
+
+  // Activity
+  const actDays = playerActivity?.days?.[pid] ?? null;
+  const actStr  = actDays!=null ? (actDays<1?'today':Math.floor(actDays)+'d ago') : '—';
+
+  // Raids (if loaded)
+  const raids = (battleHistoryData?.raids)||[];
+  const raidsAsAtk = raids.filter(r=>r.attacker_pid===pid).length;
+  const raidsAsDef = raids.filter(r=>r.defender_pid===pid).length;
+
+  const mark = loadMarks()[pid]||null;
+  const markHtml = mark==='friend'?'<span style="color:#6fffa9">♥ Friend</span>':
+                   mark==='enemy' ?'<span style="color:#E24B4A">✕ Enemy</span>':'';
+
+  document.getElementById('mp-body').innerHTML=`
+    <table style="width:100%;border-collapse:collapse">
+      <tr><td style="color:#666;padding:1px 0">Rank</td><td style="text-align:right;color:#FAC775">#${rank}</td></tr>
+      <tr><td style="color:#666;padding:1px 0">Turfs</td><td style="text-align:right;color:#aaa">${p.tiles}</td></tr>
+      <tr><td style="color:#666;padding:1px 0">Garrison</td><td style="text-align:right">
+        <span style="color:#aaa">${totalH}H</span>
+        <span style="color:#6fffa9;margin-left:4px">${totalB}B</span>
+        <span style="color:#ff8483;margin-left:4px">${totalE}E</span>
+        <span style="color:#666;margin-left:4px">(${totalGar})</span>
+      </td></tr>
+      <tr><td style="color:#666;padding:1px 0">Last active</td><td style="text-align:right;color:#aaa">${actStr}</td></tr>
+      <tr><td style="color:#666;padding:1px 0">Raids (atk/def)</td><td style="text-align:right;color:#aaa">${raidsAsAtk} / ${raidsAsDef}</td></tr>
+      ${markHtml?`<tr><td colspan="2" style="padding-top:4px">${markHtml}</td></tr>`:''}
+      ${p.inactive?'<tr><td colspan="2" style="color:#666;font-size:9px;padding-top:4px">INACTIVE</td></tr>':''}
+    </table>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button onclick="closeLeaderboard();closeMiniProfile();jumpToPlayer('${pid}')" style="font-size:9px;padding:2px 8px;flex:1">🗺 Go to</button>
+      <button onclick="closeMiniProfile();openGarrison('${pid}',event)" style="font-size:9px;padding:2px 8px;flex:1">🛡 Garrison</button>
+    </div>`;
+}
+
+function closeMiniProfile(){
+  document.getElementById('miniprofile-modal').style.display='none';
+}
+
+// Close mini-profile on outside click
+document.addEventListener('click', e=>{
+  const modal = document.getElementById('miniprofile-modal');
+  if(modal.style.display!=='none'){
+    const box = document.getElementById('miniprofile-box');
+    if(!box.contains(e.target)) closeMiniProfile();
+  }
+});
+
 
 // ── ZOOM INDICATOR ────────────────────────────────────────────────────────────
 function updateZoomIndicator(){
