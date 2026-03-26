@@ -777,6 +777,113 @@ else:
     with open(RAIDS_FILE, "w", encoding="utf-8") as f:
         json.dump(all_raids, f, separators=(",", ":"), ensure_ascii=False)
     print(f"  raids.json updated ({len(all_raids)} total, {len(new_raids)} new)")
+# ── HQ DESTROYED TRACKING ──────────────────────────────────────────────────────
+# HeadquarterDestroyedEvent fires when an HQ is attacked and the attacker wins.
+# This happens for BOTH attack_type 2 (capture blocked, 11+ defenders) and
+# attack_type 3 (actual capture). We only want attack_type 2 — where the tile
+# stays with the defender. We detect this by checking if a CaptureEvent exists
+# in the same TX: if yes → real capture (skip), if no → repelled (keep).
+print("Fetching HQ destroyed events...")
+
+HQ_DESTROYED_FILE = "hq_destroyed.json"
+HQ_DESTROYED_EVENT = "0xe660c11d5cddf961e2f153e2e9c89517bdbb2dfa64b9d3aae711672aeb7f240d::game_events::HeadquarterDestroyedEvent"
+CAPTURE_EVENT_TYPE = "0xe660c11d5cddf961e2f153e2e9c89517bdbb2dfa64b9d3aae711672aeb7f240d::game_events::CaptureEvent"
+MAX_HQD = 200
+
+try:
+    existing_hqd = json.loads(open(HQ_DESTROYED_FILE, encoding="utf-8").read())
+except Exception:
+    existing_hqd = []
+
+# Backfill: remove existing entries that are actually captures (attack_type 3)
+# These ended up in hq_destroyed.json before we had the CaptureEvent filter.
+cleaned = []
+needs_check = [h for h in existing_hqd if "is_repelled" not in h]
+if needs_check:
+    print(f"  Checking {len(needs_check)} existing entries for false captures...")
+    for h in needs_check:
+        digest = h.get("digest","")
+        if not digest:
+            continue
+        try:
+            tx = rpc("sui_getTransactionBlock", [digest, {"showEvents": True}])
+            tx_events = tx.get("events") or []
+            has_capture = any(CAPTURE_EVENT_TYPE in e.get("type","") for e in tx_events)
+            if not has_capture:
+                h["is_repelled"] = True
+                cleaned.append(h)
+            # else: drop it — it was a real capture, not a repel
+            time.sleep(DELAY)
+        except Exception:
+            h["is_repelled"] = True  # keep on error
+            cleaned.append(h)
+    already_checked = [h for h in existing_hqd if "is_repelled" in h]
+    existing_hqd = already_checked + cleaned
+    print(f"  Removed {len(needs_check) - len(cleaned)} false capture entries")
+
+known_hqd_digests = {h["digest"] for h in existing_hqd if h.get("digest")}
+new_hqd = []
+
+try:
+    cursor = None
+    pages  = 0
+    found  = 0
+    while pages < 10:
+        params = [{"MoveEventType": HQ_DESTROYED_EVENT}, cursor, 50, True]
+        result = rpc("suix_queryEvents", params)
+        events = result.get("data", [])
+        if not events and pages == 0:
+            print("  HeadquarterDestroyedEvent: no events found")
+            break
+        stop = False
+        for ev in events:
+            digest = ev.get("id", {}).get("txDigest", "")
+            if not digest or digest in known_hqd_digests:
+                continue
+            # Fetch full TX to check for CaptureEvent in same TX
+            try:
+                tx = rpc("sui_getTransactionBlock", [digest, {"showEvents": True}])
+                tx_events = tx.get("events") or []
+                has_capture = any(CAPTURE_EVENT_TYPE in e.get("type","") for e in tx_events)
+                if has_capture:
+                    # attack_type 3 — real capture, skip
+                    continue
+                # attack_type 2 — repelled, keep
+                parsed = ev.get("parsedJson") or {}
+                ts_ms  = ev.get("timestampMs") or parsed.get("timestamp")
+                ts_iso = datetime.fromtimestamp(int(ts_ms)/1000, tz=timezone.utc).isoformat() if ts_ms else now_utc.isoformat()
+                new_hqd.append({
+                    "digest":        digest,
+                    "attacker_pid":  parsed.get("attacker", ""),
+                    "attacker_name": parsed.get("attacker_name", ""),
+                    "defender_pid":  parsed.get("defender", ""),
+                    "defender_name": parsed.get("defender_name", ""),
+                    "timestamp":     ts_iso,
+                })
+                known_hqd_digests.add(digest)
+                found += 1
+                time.sleep(DELAY)
+            except Exception as e:
+                print(f"    Warning: TX fetch failed for {digest[:16]}: {e}")
+                continue
+        pages += 1
+        if not result.get("hasNextPage"):
+            break
+        cursor = result.get("nextCursor")
+        time.sleep(DELAY)
+    print(f"  HeadquarterDestroyedEvent: {pages} page(s), {found} new (capture-filtered)")
+except Exception as e:
+    print(f"  Warning: HeadquarterDestroyedEvent failed: {e}")
+
+if new_hqd or existing_hqd:
+    all_hqd = existing_hqd + new_hqd
+    all_hqd.sort(key=lambda h: h["timestamp"])
+    all_hqd = all_hqd[-MAX_HQD:]
+    with open(HQ_DESTROYED_FILE, "w", encoding="utf-8") as f:
+        json.dump(all_hqd, f, separators=(",", ":"), ensure_ascii=False)
+    print(f"  hq_destroyed.json updated ({len(all_hqd)} total, {len(new_hqd)} new)")
+
+
 print(f"  Players:   {len(player_list)}")
 print(f"  Tiles:     {len(compact_tiles)}")
 print(f"  Size:      {size_kb:.0f} KB")
