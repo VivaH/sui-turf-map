@@ -466,7 +466,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 
 <div id="toolbar">
 <div id="toolbar-scroll">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:8px;color:#999;margin-right:8px;flex-shrink:0;font-family:var(--font-mono)">v3.35</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:8px;color:#999;margin-right:8px;flex-shrink:0;font-family:var(--font-mono)">v3.36</span>
   <div class="sep"></div>
   <button id="route-btn" class="tb-btn" onclick="toggleRouteMode()">🗺 Route</button>
   <span id="route-indicator">Click a turf or player to select A → B</span>
@@ -898,6 +898,7 @@ async function loadHistory(){
 
 async function loadLatest(){
   await loadData('data.json');
+  loadBattleHistory();
 }
 
 async function loadSnapshot(file){
@@ -1483,15 +1484,6 @@ function drawMap(){
                 (ch.fromPid&&MY_IDS.has(ch.fromPid))?'rgba(255,132,131,0.85)':
                 ch.toPid?'rgba(111,255,169,0.5)':'rgba(255,132,131,0.5)';
       ctx.fillStyle=col;ctx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
-    }
-    ctx.font='11px sans-serif';ctx.textBaseline='bottom';
-    const leg2=[['#6fffa9','Captured (24h)'],['#ff8483','Lost (24h)']];
-    let lx2=8,ly2=H-8;
-    for(const [col,lbl] of leg2){
-      ctx.fillStyle=col;ctx.fillRect(lx2,ly2-12,12,12);
-      ctx.fillStyle='rgba(255,255,255,0.75)';ctx.textAlign='left';
-      ctx.fillText(lbl,lx2+16,ly2);
-      lx2+=ctx.measureText(lbl).width+34;
     }
   }
 
@@ -2294,65 +2286,101 @@ async function loadBattleHistory(){
   if(snapshots.length<2) return;
   const now=Date.now();
   const cutoff=now-24*60*60*1000;
-  // Use s.timestamp (ISO string) if available, fall back to label parsing
-  const recent=snapshots.filter(s=>{
-    const ts=s.timestamp?new Date(s.timestamp):new Date(s.label);
-    return !isNaN(ts)&&ts.getTime()>=cutoff;
-  });
-  // Need at least 2 snapshots to compare; fall back to last 4 if not enough
-  const toLoad=recent.length>=2?recent:snapshots.slice(0,Math.min(4,snapshots.length));
-  // oldest = last in array (snapshots are newest-first), newest = first
-  const newest=toLoad[0];
-  const oldest=toLoad[toLoad.length-1];
-  // Guard: don't compare a snapshot with itself
-  if(newest.file===oldest.file) return;
-  try{
-    const [dOld,dNew]=await Promise.all([
-      fetch(oldest.file+'?t='+Date.now()).then(r=>r.json()),
-      fetch(newest.file+'?t='+Date.now()).then(r=>r.json()),
-    ]);
-    const mapOld=tileOwnerMap(dOld),mapNew=tileOwnerMap(dNew);
-    const changedTiles=[];
-    const playerChanges=new Map();
-    const pidInfo=new Map();
-    for(const p of [...(dOld.players||[]),...(dNew.players||[])]){
+
+  // snapshots[] is newest-first. Build oldest-first working list with timestamps.
+  const withTs = snapshots.map(s=>({
+    ...s,
+    ms: s.timestamp ? new Date(s.timestamp).getTime() : new Date(s.label).getTime()
+  })).filter(s=>!isNaN(s.ms));
+
+  if(withTs.length<2) return;
+
+  // Find the snapshot closest to exactly 24h ago (may be just outside the window).
+  // This is the anchor — same bestIdx approach as the leaderboard.
+  const newestMs = withTs[0].ms;
+  let anchorIdx = withTs.length-1; // fallback: oldest available
+  let bestDiff = Infinity;
+  for(let i=1; i<withTs.length; i++){
+    const diff = Math.abs(withTs[i].ms - cutoff);
+    if(diff < bestDiff){ bestDiff=diff; anchorIdx=i; }
+  }
+
+  // Collect all snapshots from anchor up to and including newest (oldest-first for pairs).
+  // withTs is newest-first, so slice from 0..anchorIdx inclusive, then reverse.
+  const window = withTs.slice(0, anchorIdx+1).reverse(); // now oldest-first
+
+  // Fetch all snapshots in the window in parallel.
+  const fetched = await Promise.all(
+    window.map(s => fetch(s.file+'?t='+Date.now()).then(r=>r.json()).catch(()=>null))
+  );
+
+  // Build per-snapshot owner maps.
+  const ownerMaps = fetched.map(d => d ? tileOwnerMap(d) : new Map());
+
+  // Collect pidInfo from all fetched snapshots.
+  const pidInfo = new Map();
+  for(const d of fetched){
+    if(!d) continue;
+    for(const p of (d.players||[])){
       if(!pidInfo.has(p.pid)) pidInfo.set(p.pid,{name:p.name||'',color:p.color});
     }
-    const allKeys=new Set([...mapOld.keys(),...mapNew.keys()]);
+  }
+
+  // Compare consecutive pairs, last-write-wins per turf key.
+  // turfState tracks the current known state: key → {fromPid, toPid, type}
+  const turfState = new Map();
+
+  for(let i=0; i<ownerMaps.length-1; i++){
+    const mapA = ownerMaps[i];
+    const mapB = ownerMaps[i+1];
+    const allKeys = new Set([...mapA.keys(),...mapB.keys()]);
     for(const key of allKeys){
-      const a=mapOld.get(key),b=mapNew.get(key);
-      const fromPid=a?.pid||null,toPid=b?.pid||null;
-      if(fromPid===toPid) continue;
-      const [x,y]=key.split(',').map(Number);
-      let type=!fromPid?'new':!toPid?'abandoned':'captured';
-      changedTiles.push({x,y,fromPid,toPid,type});
-      if(toPid){
-        if(!playerChanges.has(toPid)){const i=pidInfo.get(toPid)||{};playerChanges.set(toPid,{gained:0,lost:0,name:i.name||'',color:i.color||'#888'});}
-        playerChanges.get(toPid).gained++;
-      }
-      if(fromPid){
-        if(!playerChanges.has(fromPid)){const i=pidInfo.get(fromPid)||{};playerChanges.set(fromPid,{gained:0,lost:0,name:i.name||'',color:i.color||'#888'});}
-        playerChanges.get(fromPid).lost++;
-      }
+      const a = mapA.get(key);
+      const b = mapB.get(key);
+      const fromPid = a?.pid||null;
+      const toPid   = b?.pid||null;
+      if(fromPid===toPid) continue; // no change in this pair
+      const [x,y] = key.split(',').map(Number);
+      const type = !fromPid?'new':!toPid?'abandoned':'captured';
+      // Overwrite any earlier state for this turf — last change wins.
+      turfState.set(key,{x,y,fromPid,toPid,type});
     }
-    battleHistoryData={changedTiles,playerChanges,pidInfo,fromLabel:oldest.label,toLabel:newest.label};
-    // Load HQ captures
-    try{
-      const hqr=await fetch('hq_captures.json?t='+Date.now());
-      if(hqr.ok) battleHistoryData.hqCaptures=await hqr.json();
-    }catch(e){}
-    // Load raids
-    try{
-      const rdr=await fetch('raids.json?t='+Date.now());
-      if(rdr.ok) battleHistoryData.raids=await rdr.json();
-    }catch(e){}
-    // Load HQ destroyed events
-    try{
-      const hqdr=await fetch('hq_destroyed.json?t='+Date.now());
-      if(hqdr.ok) battleHistoryData.hqDestroyed=await hqdr.json();
-    }catch(e){}
-    renderTopMovers();
-  }catch(e){console.warn('Battle history error:',e);}
+  }
+
+  // Build changedTiles and playerChanges from final turfState.
+  const changedTiles = [];
+  const playerChanges = new Map();
+  for(const ch of turfState.values()){
+    changedTiles.push(ch);
+    if(ch.toPid){
+      if(!playerChanges.has(ch.toPid)){const i=pidInfo.get(ch.toPid)||{};playerChanges.set(ch.toPid,{gained:0,lost:0,name:i.name||'',color:i.color||'#888'});}
+      playerChanges.get(ch.toPid).gained++;
+    }
+    if(ch.fromPid){
+      if(!playerChanges.has(ch.fromPid)){const i=pidInfo.get(ch.fromPid)||{};playerChanges.set(ch.fromPid,{gained:0,lost:0,name:i.name||'',color:i.color||'#888'});}
+      playerChanges.get(ch.fromPid).lost++;
+    }
+  }
+
+  const oldest = window[0];
+  const newest = window[window.length-1];
+  battleHistoryData={changedTiles,playerChanges,pidInfo,fromLabel:oldest.label,toLabel:newest.label};
+  // Load HQ captures
+  try{
+    const hqr=await fetch('hq_captures.json?t='+Date.now());
+    if(hqr.ok) battleHistoryData.hqCaptures=await hqr.json();
+  }catch(e){}
+  // Load raids
+  try{
+    const rdr=await fetch('raids.json?t='+Date.now());
+    if(rdr.ok) battleHistoryData.raids=await rdr.json();
+  }catch(e){}
+  // Load HQ destroyed events
+  try{
+    const hqdr=await fetch('hq_destroyed.json?t='+Date.now());
+    if(hqdr.ok) battleHistoryData.hqDestroyed=await hqdr.json();
+  }catch(e){}
+  renderTopMovers();
 }
 
 function toggleBattleHistory(){
