@@ -922,10 +922,22 @@ async function loadData(url){
     const d=await resp.json();
 
     const gen=new Date(d.generated);
-    const ageMin=Math.round((Date.now()-gen)/60000);
     const pad=n=>String(n).padStart(2,'0');
     const dtStr=`${pad(gen.getDate())}-${pad(gen.getMonth()+1)}-${String(gen.getFullYear()).slice(2)} ${pad(gen.getHours())}:${pad(gen.getMinutes())}`;
-    document.getElementById('age').textContent=`Data: ${ageMin<60?ageMin+'m':Math.round(ageMin/60)+'h'} ago (${dtStr})`;
+    function fmtAge(genMs){
+      const totalMin=Math.floor((Date.now()-genMs)/60000);
+      const blocks=Math.floor(totalMin/15); // round down to 15m blocks
+      const roundedMin=blocks*15;
+      const h=Math.floor(roundedMin/60);
+      const m=roundedMin%60;
+      if(h===0) return `${m||15}m ago`; // minimum 15m
+      if(m===0) return `${h}h ago`;
+      return `${h}h ${m}m ago`;
+    }
+    if(window._ageTimer) clearInterval(window._ageTimer);
+    const updateAge=()=>{ document.getElementById('age').textContent=`Data: ${fmtAge(gen.getTime())} (${dtStr})`; };
+    updateAge();
+    window._ageTimer=setInterval(updateAge, 15*60*1000);
 
     totalTiles=d.total_tiles||0;
     unclaimedTiles=d.unclaimed||0;
