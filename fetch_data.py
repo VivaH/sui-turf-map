@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 TURF_SYSTEM      = "0x372e8fd0e12d2051860553b9e61065729dcddec11970b295bbcf19d7261cc502"
 PLAYERS_REGISTRY = "0x84a4a83842e92d8091563ae7a033797ad5182baca84de9f89573cb5b3722b494"
 NULL_ID          = "0x" + "0" * 64
-MAX_SNAPSHOTS    = 120  # keep last 120 snapshots (~30 days at 4x/day)
+MAX_SNAPSHOTS    = 90   # keep last 90 snapshots (~30 days at 3x/day)
 SNAPSHOTS_DIR    = "snapshots"
 
 RPC_ENDPOINTS = [
@@ -230,11 +230,24 @@ MY_IDS = set()  # Determined client-side per user via localStorage
 def pid_color(pid, tile_count=0):
     h = 0
     for c in pid: h = (h * 31 + ord(c)) & 0xFFFFFFFF
+    # Multiply by prime for better bit distribution
+    h = (h * 2654435761) & 0xFFFFFFFF
     hue = (h % 300) + 30
-    # Vary saturation and lightness slightly per player so nearby hues look distinct
-    sat = 55 + (h >> 8 & 0xF)        # 55–70 %
-    lig = 38 + (h >> 4 & 0xF)        # 38–53 %
+    # Wider saturation and lightness ranges for more visual distinction
+    sat = 50 + (h >> 8 & 0x19)       # 50–75 %
+    lig = 30 + (h >> 4 & 0x1C)       # 30–58 %
     return f"hsl({hue},{sat}%,{lig}%)"
+
+def pid_bcolor(pid):
+    h = 0
+    for c in pid: h = (h * 31 + ord(c)) & 0xFFFFFFFF
+    h = (h * 2654435761) & 0xFFFFFFFF
+    hue = (h % 300) + 30
+    # Complementary hue (+150°), slightly lighter and less saturated for border
+    bhue = (hue + 150) % 360
+    bsat = 40 + (h >> 12 & 0xF)      # 40–55 %
+    blig = 45 + (h >> 6 & 0xF)       # 45–60 %
+    return f"hsl({bhue},{bsat}%,{blig}%)"
 
 player_list = []
 pid_to_index = {}
@@ -251,6 +264,7 @@ for pid, count in sorted(owner_count.items(), key=lambda x: -x[1]):
         "tiles":   count,
         "me":      is_me,
         "color":   "#7F77DD" if is_me else pid_color(pid, count),
+        "bcolor":  "#9F97FF" if is_me else pid_bcolor(pid),
     })
 
 compact_tiles = []

@@ -967,7 +967,7 @@ async function loadData(url){
     for(const t of (d.tiles||[])){
       const p=players[t.p]; if(!p) continue;
       const isMe=MY_IDS.has(p.pid);
-      tiles.push({x:t.x,y:t.y,pid:p.pid,isHQ:!!t.hq,isMe,color:p.color,pidIdx:t.p,
+      tiles.push({x:t.x,y:t.y,pid:p.pid,isHQ:!!t.hq,isMe,color:p.color,bcolor:p.bcolor||null,pidIdx:t.p,
         gH:t.g_h||0,gB:t.g_b||0,gE:t.g_e||0,oid:t.oid||null});
       tileMap.set(`${t.x},${t.y}`,tiles.length-1);
     }
@@ -1403,6 +1403,15 @@ function drawMap(){
     // 6. Zoom-dependent rendering: at very low zoom draw bounding-box fill per player
     // (handled below via aggregate pass — individual tiles still drawn here for correctness)
     ctx.fillStyle=col;ctx.fillRect(sx+0.5,sy+0.5,cs-1,cs-1);
+
+    // Complementary border for visual distinction between nearby players
+    if(zoom>1&&!t.isHQ&&t.bcolor){
+      ctx.strokeStyle=t.bcolor;
+      ctx.lineWidth=1;
+      ctx.globalAlpha=0.35;
+      ctx.strokeRect(sx+0.5,sy+0.5,cs-1,cs-1);
+      ctx.globalAlpha=1;
+    }
 
     // 1. HQ golden border
     if(t.isHQ){
