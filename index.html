@@ -1391,7 +1391,7 @@ function drawMap(){
     }
     if(!col){
       if(highlightPid&&t.pid===highlightPid){col='#ffe066';}
-      else if(t.isHQ){col=t.isMe?'#533AB7':(getMark(t.pid)==='friend'?'#0a5f40':getMark(t.pid)==='enemy'?'#5f0a0a':'#6B1A1A');}
+      else if(t.isHQ){col=t.isMe?t.color:(getMark(t.pid)==='friend'?'#0a5f40':getMark(t.pid)==='enemy'?'#5f0a0a':'#6B1A1A');}
       else{
         const p=players[t.pidIdx];
         if(top10Mode&&!top10Pids.has(t.pid)){col='#2a2a2a';}
@@ -1415,7 +1415,7 @@ function drawMap(){
 
     // 1. HQ golden border
     if(t.isHQ){
-      const bw = Math.max(1, cs*0.12);
+      const bw = t.isMe ? Math.max(2, cs*0.18) : Math.max(1, cs*0.12);
       ctx.strokeStyle = t.isMe ? '#FAC775' : getMark(t.pid)==='friend' ? '#6fffa9' : getMark(t.pid)==='enemy' ? '#ff8483' : '#c8922a';
       ctx.lineWidth = bw;
       ctx.strokeRect(sx+bw/2, sy+bw/2, cs-bw, cs-bw);
@@ -1547,7 +1547,7 @@ function drawMinimap(){
   for(const t of tiles){
     let col;
     if(t.isHQ) col=t.isMe?'#FAC775':'#c8922a';
-    else col=t.isMe?'#5b8fff':t.color;
+    else col=t.color;
     if(_mmHasRoute){
       const key=`${t.x},${t.y}`;
       if(routePathMap.has(key)){
