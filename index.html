@@ -485,7 +485,7 @@ button.top10-active{background:#1a0f00;border-color:var(--v-gold);color:var(--v-
 
 <div id="toolbar">
 <div id="toolbar-scroll">
-  <h1>Vendetta World Map</h1><span id="ver" style="font-size:8px;color:#999;margin-right:8px;flex-shrink:0;font-family:var(--font-mono)">v3.42</span>
+  <h1>Vendetta World Map</h1><span id="ver" style="font-size:8px;color:#999;margin-right:8px;flex-shrink:0;font-family:var(--font-mono)">v3.43</span>
   <div class="sep"></div>
   <button id="route-btn" class="tb-btn" onclick="toggleRouteMode()">🗺 <span class="tb-label">Route</span></button>
   <span id="route-indicator">Click a turf or player to select A → B</span>
@@ -2702,7 +2702,6 @@ function openGarrison(pid, e){
   if(e) e.stopPropagation();
   garrisonPid = pid;
   garrisonRows = [];
-  garSortKeys = [{col:'total', dir:'desc'}]; // reset sort on open
   const p=players.find(pl=>pl.pid===pid)||{};
   document.getElementById('garrison-title').textContent=`🛡 ${p.name||'[unknown]'}`;
 
@@ -3998,7 +3997,7 @@ function renderSoftTargets(){
 
   el.innerHTML = top.map(({p, dist, inact}) => {
     const lcdCls = inact >= 14 ? 'old' : inact >= 7 ? 'warn' : '';
-    const distTxt = dist === Infinity ? '—' : dist === 0 ? 'adjacent' : dist + ' tiles';
+    const distTxt = dist === Infinity ? '—' : dist <= 1 ? 'adjacent' : dist + ' tiles';
     const actDays = playerActivity?.days?.[p.pid];
     const tipTxt = actDays != null
       ? `Turf change: ${p.lcd??'?'}d ago · Last active: ${actDays}d ago`
