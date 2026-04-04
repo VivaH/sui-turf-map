@@ -204,11 +204,16 @@ const MODULES = [
     kw:'findRoute · routeMode · pad berekenen · routepaneel',
     tags:['route','pad','routepaneel','afstand','A*'],
     deps:[] },
-  { id:'canvas',      name:'Canvas',      file:'modules/canvas.js',      size:'~414 r',
-    desc:'Kaart tekenen, buurpopup, minimap, animaties',
-    kw:'drawMap · drawMinimap · tile kleur · tooltip · buurpopup',
-    tags:['kaart','tekenen','tile kleur','tooltip','buurpopup','minimap','overlay','drawMap'],
-    depNote:'Canvas roept _atkSim aan (sim.js) voor aanvalsadvies in de buurpopup.',
+  { id:'canvas-draw',     name:'Canvas Draw',     file:'modules/canvas.js', size:'~235 r', lineRange:'r.181–414',
+    desc:'drawMap, drawMinimap, resizeCanvas, rAF — hoe tiles, routes en overlays getekend worden',
+    kw:'drawMap · drawMinimap · tile kleur · route overlay · battle overlay · ghost overlay · resizeCanvas',
+    tags:['kaart','tekenen','tile kleur','minimap','overlay','drawMap','drawMinimap','resize','route overlay','24h overlay'],
+    deps:[] },
+  { id:'canvas-neighbor', name:'Canvas Neighbor',  file:'modules/canvas.js', size:'~180 r', lineRange:'r.1–180',
+    desc:'Buurpopup, aanvalsadvies in popup, pulse-animatie op tile',
+    kw:'buurpopup · neighbor popup · aanvalsadvies in popup · pulse · tile selecteren',
+    tags:['buurpopup','neighbor popup','aanvalsadvies','pulse','pulseTile','tile selecteren'],
+    depNote:'Buurpopup gebruikt _atkSim uit sim.js voor aanvalsadvies.',
     deps:[] },
   { id:'input',       name:'Input',       file:'modules/input.js',       size:'~284 r',
     desc:'Muis, scrollen, slepen, touch/pinch, zoom',
@@ -291,28 +296,39 @@ const MODULES = [
     kw:'kleur · knop stijl · layout · modal uiterlijk · responsive · mobiel',
     tags:['css','kleur','knop','layout','modal','uiterlijk','responsive','mobiel','stijl'],
     deps:[] },
-  { id:'html', name:'HTML', file:'index.html', size:'~528 r', cssHtml:true, lineRange:'r.328–856',
-    desc:'HTML-structuur — toolbar, modals, sidebar-opbouw',
-    kw:'knop toevoegen · nieuw element · toolbar · modal HTML · structuur',
-    tags:['html','knop toevoegen','element','toolbar','modal html','structuur'],
+  { id:'html-toolbar',  name:'HTML Toolbar',  file:'index.html', size:'~282 r', cssHtml:true, lineRange:'r.328–609',
+    desc:'Toolbar, kaartgebied, route-paneel, sidebar, spelerslijst-structuur',
+    kw:'toolbar knop · route panel · sidebar · stats · filter · zoekbalk · minimap',
+    tags:['toolbar','knop toevoegen','route panel','sidebar','stats','zoekbalk','minimap'],
+    deps:[] },
+  { id:'html-garrison', name:'HTML Garrison', file:'index.html', size:'~84 r',  cssHtml:true, lineRange:'r.610–693',
+    desc:'Garrison modal HTML — alle tabs (Navigate, History, Raids, Attack, Recall)',
+    kw:'garrison modal · navigate tab · recall tab · kolommen · tabs structuur',
+    tags:['garrison modal','navigate tab','recall tab','kolommen','e b h volgorde','tabs'],
+    deps:[] },
+  { id:'html-modals',   name:'HTML Modals',   file:'index.html', size:'~163 r', cssHtml:true, lineRange:'r.694–856',
+    desc:'Leaderboard, Battle Analyzer, mini-profile, Soft Targets, rapport, profiel, wallet, refresh',
+    kw:'leaderboard modal · battle analyzer · mini profile · soft targets · rapport · profiel modal · wallet · refresh',
+    tags:['leaderboard modal','battle analyzer','mini profile','soft targets','rapport','profiel modal','wallet modal','refresh modal'],
     deps:[] },
 ];
 
 const QUICK_GUIDE = [
   ['Kleur/stijl knop of tekst',   'css'],
-  ['Knop toevoegen aan toolbar',   'html'],
-  ['Nieuwe modal toevoegen',       'html,css'],
+  ['Knop toevoegen aan toolbar',   'html-toolbar'],
+  ['Nieuwe modal toevoegen',       'html-modals,css'],
   ['Spelersrij anders weergeven',  'sidebar'],
-  ['Tile-kleur op de kaart',       'canvas'],
+  ['Tile-kleur op de kaart',       'canvas-draw'],
   ['Mobiele weergave aanpassen',   'css'],
-  ['Garrison-tabs aanpassen',      'garrison,html'],
+  ['Garrison-tabs aanpassen',      'garrison,html-garrison'],
+  ['Buurpopup aanpassen',          'canvas-neighbor'],
   ['Aanvalsadvies verbeteren',     'sim'],
   ['Battle Analyzer uitbreiden',   'analyzer'],
   ['Soft Targets logica wijzigen', 'intel'],
   ['Leaderboard / trends',         'leaderboard'],
   ['Routeberekening',              'route'],
-  ['24h overlay aanpassen',        'battle-hist'],
-  ['Ghost mode wijzigen',          'ghost'],
+  ['24h overlay aanpassen',        'battle-hist,canvas-draw'],
+  ['Ghost mode wijzigen',          'ghost,canvas-draw'],
   ['Recall / wallet',              'garrison,wallet'],
   ['Data laden / verwerken',       'core'],
   ['PNG of GIF exporteren',        'export'],
@@ -391,10 +407,10 @@ function updateUI(){
   else dw.style.display='none';
 
   // Token estimate
-  const SIZE_TOKENS = {'~168 r':700,'~131 r':550,'~414 r':1700,'~284 r':1200,'~152 r':640,
+  const SIZE_TOKENS = {'~168 r':700,'~131 r':550,'~235 r':980,'~180 r':750,'~284 r':1200,'~152 r':640,
     '~281 r':1180,'~272 r':1140,'~232 r':970,'~289 r':1210,'~95 r':400,
     '~246 r':1030,'~179 r':750,'~178 r':745,'~110 r':460,'~156 r':655,
-    '~104 r':435,'~229 r':960,'~315 r':1320,'~528 r':2210};
+    '~104 r':435,'~229 r':960,'~315 r':1320,'~282 r':1180,'~84 r':350,'~163 r':680};
   const req = document.getElementById('request-area').value;
   const tEl = document.getElementById('token-est');
   if(selMods.length){
@@ -437,15 +453,36 @@ async function generate(){
   status.textContent = 'globals-stub.js ophalen…';
   const stub = await fetchFile('./globals-stub.js');
 
+  // File cache — index.html en canvas.js kunnen door meerdere sub-blokken gedeeld worden
+  const fileLineCache = new Map();
+  async function fetchLines(file){
+    if(fileLineCache.has(file)) return fileLineCache.get(file);
+    status.textContent = `${file} ophalen…`;
+    const text = await fetchFile('./'+file);
+    const lines = text.startsWith('// ⚠') ? null : text.split('\n');
+    fileLineCache.set(file, lines);
+    return lines;
+  }
+
+  function extractRange(lines, lineRange){
+    if(!lines) return null;
+    const match = lineRange.match(/r\.(\d+)[–-](\d+)/);
+    if(!match) return null;
+    const from = parseInt(match[1]) - 1;
+    const to   = parseInt(match[2]);
+    return lines.slice(from, to).join('\n');
+  }
+
   // Fetch each module
   const contents = [];
   for(const m of selMods){
-    if(m.cssHtml){
-      contents.push({m, text:
-        `// ── ${m.name.toUpperCase()} (${m.lineRange} in index.html) ──────────────────\n`+
-        `// Kopieer regels ${m.lineRange} uit index.html en plak ze hier,\n`+
-        `// of laat Claude de wijziging beschrijven als diff/instructie.`
-      });
+    if(m.lineRange){
+      const lines = await fetchLines(m.file);
+      const extracted = extractRange(lines, m.lineRange);
+      const text = extracted
+        ? extracted
+        : `// ⚠ Kon ${m.file} niet laden — kopieer regels ${m.lineRange} handmatig.`;
+      contents.push({m, text});
     } else {
       status.textContent = `${m.file} ophalen…`;
       contents.push({m, text: await fetchFile('./'+m.file)});
@@ -456,7 +493,7 @@ async function generate(){
   const multiJs = selMods.filter(m=>!m.cssHtml && !m.lineRange).length > 1;
   const instruct = selMods.map(m => {
     if(m.cssHtml){
-      return `- Geef de gewijzigde ${m.name}-sectie (${m.lineRange}) terug als downloadbaar bestand — NIET de volledige index.html. Label het duidelijk met de regelnummers zodat ik het kan plakken op r.${m.lineRange.replace('r.','')} in index.html.`;
+      return `- Geef de gewijzigde ${m.name}-sectie (${m.lineRange}) terug als downloadbaar bestand — NIET de volledige index.html. Label het duidelijk met de regelnummers.`;
     } else if(m.lineRange){
       const fname = m.file.split('/').pop();
       return `- Wijzig sectie ${m.lineRange} in ${m.file} — geef het complete gewijzigde ${fname} terug als download`;
@@ -472,8 +509,8 @@ async function generate(){
   const pasteInstructions = htmlMods.length
     ? '\nHOE HET HTML-SNIPPET PLAKKEN IN INDEX.HTML:\n' +
       htmlMods.map(m => {
-        const [from, to] = m.lineRange.replace('r.','').split('–');
-        return `- ${m.name} (${m.lineRange}): open index.html → Ctrl+G → ${from} → selecteer t/m regel ${to} → verwijder selectie → plak het snippet`;
+        const pts = m.lineRange.replace('r.','').split('–');
+        return `- ${m.name} (${m.lineRange}): open index.html → Ctrl+G → ${pts[0]} → selecteer t/m regel ${pts[1]} → verwijder selectie → plak het snippet`;
       }).join('\n')
     : null;
 
