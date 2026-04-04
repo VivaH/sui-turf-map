@@ -1,4 +1,4 @@
-// ── GLOBALS STUB v3.43 ────────────────────────────────────────────────────────
+// ── GLOBALS STUB v4.00 ────────────────────────────────────────────────────────
 // Meesturen bij elke losse module — GEEN implementaties, alleen signaturen + state
 // Gebruik: stuur dit bestand + alleen de relevante sectie uit index.html aan Claude.
 // De index.html zelf blijft ongewijzigd; dit bestand is puur voor context-optimalisatie.
