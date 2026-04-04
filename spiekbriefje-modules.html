@@ -493,7 +493,7 @@ async function generate(){
   const multiJs = selMods.filter(m=>!m.cssHtml && !m.lineRange).length > 1;
   const instruct = selMods.map(m => {
     if(m.cssHtml){
-      return `- Geef de gewijzigde ${m.name}-sectie (${m.lineRange}) terug als downloadbaar bestand — NIET de volledige index.html. Label het duidelijk met de regelnummers.`;
+      return `- Geef de gewijzigde ${m.name}-sectie (${m.lineRange}) terug als downloadbaar bestand — NIET de volledige index.html. Label het duidelijk met de regelnummers.\n- Vermeld daarna expliciet hoe ik het snippet moet plakken in index.html (regelnummers + stappen).`;
     } else if(m.lineRange){
       const fname = m.file.split('/').pop();
       return `- Wijzig sectie ${m.lineRange} in ${m.file} — geef het complete gewijzigde ${fname} terug als download`;
