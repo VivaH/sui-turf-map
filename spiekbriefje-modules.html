@@ -204,8 +204,11 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);min-height:1
       Wordt alleen in <strong style="color:#aaa">jouw browser</strong> opgeslagen (localStorage).<br>
       Genereer een sleutel op <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--blue)">console.anthropic.com →</a>
     </div>
-    <input id="apikey-input" type="password" placeholder="sk-ant-api03-…"
-      style="width:100%;background:#050505;color:#ccc;border:2px solid #333;padding:8px 10px;font-family:var(--mono);font-size:11px;outline:none;margin-bottom:6px">
+    <div style="display:flex;gap:6px;margin-bottom:6px">
+      <input id="apikey-input" type="password" placeholder="sk-ant-api03-…"
+        style="flex:1;background:#050505;color:#ccc;border:2px solid #333;padding:8px 10px;font-family:var(--mono);font-size:11px;outline:none">
+      <button onclick="toggleKeyVisible()" id="apikey-show" style="padding:4px 10px;font-size:10px;background:transparent;border:2px solid #333;color:#888;box-shadow:none;flex-shrink:0">👁</button>
+    </div>
     <div id="apikey-status" style="font-size:10px;min-height:16px;margin-bottom:12px;color:#888"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button onclick="closeApiKeyModal()" style="font-size:10px;padding:4px 14px;background:transparent;border-color:#555;color:#999">Annuleren</button>
@@ -698,7 +701,8 @@ function loadApiKey(){ return localStorage.getItem(APIKEY_STORAGE)||''; }
 function openApiKeyModal(){
   const saved = loadApiKey();
   const input = document.getElementById('apikey-input');
-  input.value = saved ? '••••••••' + saved.slice(-6) : '';
+  input.value = saved || '';
+  input.type = saved ? 'password' : 'text';
   const st = document.getElementById('apikey-status');
   st.textContent = saved ? '✓ Sleutel opgeslagen (eindigt op …'+saved.slice(-6)+')' : 'Geen sleutel ingesteld.';
   st.style.color = saved ? 'var(--green)' : '#888';
@@ -709,9 +713,21 @@ function closeApiKeyModal(){
   document.getElementById('apikey-modal').style.display = 'none';
 }
 
+function toggleKeyVisible(){
+  const input = document.getElementById('apikey-input');
+  const btn = document.getElementById('apikey-show');
+  if(input.type === 'password'){
+    input.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
 function saveApiKey(){
   const val = document.getElementById('apikey-input').value.trim();
-  if(!val || val.startsWith('••')){
+  if(!val){
     document.getElementById('apikey-status').textContent = 'Voer een geldige sleutel in.';
     document.getElementById('apikey-status').style.color = 'var(--red)';
     return;
