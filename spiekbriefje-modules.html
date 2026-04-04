@@ -194,147 +194,182 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);min-height:1
 <script>
 // ── Module definitions ────────────────────────────────────────────────────────
 const MODULES = [
-  { id:'core',        name:'Core',        file:'modules/core.js',        size:'~168 r',
+  // ── JS modules ──────────────────────────────────────────────────────────────
+  { id:'core',        name:'Core',        file:'modules/core.js',
     desc:'Data laden, globals, vriend/vijand marks',
     kw:'loadData · tiles · players · loadMarks · markColor',
     tags:['data','blockchain','tiles','players','marks','vriend','vijand'],
     deps:[] },
-  { id:'route',       name:'Route',       file:'modules/route.js',       size:'~131 r',
+  { id:'route',       name:'Route',       file:'modules/route.js',
     desc:'A*-routeberekening, routepaneel op de kaart',
     kw:'findRoute · routeMode · pad berekenen · routepaneel',
     tags:['route','pad','routepaneel','afstand','A*'],
     deps:[] },
-  { id:'canvas-draw',     name:'Canvas Draw',     file:'modules/canvas.js', size:'~235 r', lineRange:'r.181–414',
-    desc:'drawMap, drawMinimap, resizeCanvas, rAF — hoe tiles, routes en overlays getekend worden',
-    kw:'drawMap · drawMinimap · tile kleur · route overlay · battle overlay · ghost overlay · resizeCanvas',
-    tags:['kaart','tekenen','tile kleur','minimap','overlay','drawMap','drawMinimap','resize','route overlay','24h overlay'],
+  { id:'canvas',      name:'Canvas',      file:'modules/canvas.js',
+    desc:'Kaart tekenen, buurpopup, minimap, animaties',
+    kw:'drawMap · drawMinimap · tile kleur · tooltip · buurpopup',
+    tags:['kaart','tekenen','tile kleur','tooltip','buurpopup','minimap','overlay','drawMap'],
+    depNote:'Canvas roept _atkSim aan (sim.js) voor aanvalsadvies in de buurpopup.',
     deps:[] },
-  { id:'canvas-neighbor', name:'Canvas Neighbor',  file:'modules/canvas.js', size:'~180 r', lineRange:'r.1–180',
-    desc:'Buurpopup, aanvalsadvies in popup, pulse-animatie op tile',
-    kw:'buurpopup · neighbor popup · aanvalsadvies in popup · pulse · tile selecteren',
-    tags:['buurpopup','neighbor popup','aanvalsadvies','pulse','pulseTile','tile selecteren'],
-    depNote:'Buurpopup gebruikt _atkSim uit sim.js voor aanvalsadvies.',
-    deps:[] },
-  { id:'input',       name:'Input',       file:'modules/input.js',       size:'~284 r',
+  { id:'input',       name:'Input',       file:'modules/input.js',
     desc:'Muis, scrollen, slepen, touch/pinch, zoom',
     kw:'zoom · pan · slepen · tap · pinch · klik · rechtsklik',
     tags:['zoom','pan','slepen','touch','pinch','klik','muis','scroll','rechtsklik','mobiel'],
     deps:[] },
-  { id:'sidebar',     name:'Sidebar',     file:'modules/sidebar.js',     size:'~152 r',
+  { id:'sidebar',     name:'Sidebar',     file:'modules/sidebar.js',
     desc:'Spelerslijst, zoekbalk, filters',
     kw:'zoeken · filteren · spelersrij · compact · friends · enemies',
     tags:['spelerslijst','zoeken','filter','sidebar','compact','friends','enemies','inactive'],
     deps:[] },
-  { id:'export',      name:'Export',      file:'modules/export.js',      size:'~281 r',
+  { id:'export',      name:'Export',      file:'modules/export.js',
     desc:'PNG, GIF, CSV exporteren + refresh modal',
     kw:'exportPNG · exportGIF · exportCSV · refresh · GitHub token',
     tags:['export','png','gif','csv','refresh','vernieuwen','download'],
     deps:[] },
-  { id:'battle-hist', name:'Battle Hist', file:'modules/battle-hist.js', size:'~272 r',
+  { id:'battle-hist', name:'Battle Hist', file:'modules/battle-hist.js',
     desc:'24h overlay (turf-wijzigingen) + nieuwsticker',
     kw:'24h overlay · changedTiles · ticker · groen rood kaart',
     tags:['24h','overlay','ticker','aanvallen','turf wisselen','groen','rood'],
     depNote:'De 24h-overlay wordt getekend in drawMap() in canvas.js.',
     deps:[] },
-  { id:'garrison',    name:'Garrison',    file:'modules/garrison.js',    size:'~232 r',
+  { id:'garrison',    name:'Garrison',    file:'modules/garrison.js',
     desc:'Garrison-modal: Navigate, Recall, History, Raids, Attack tabs',
     kw:'garrison · navigate · recall · sorteren · turf selecteren',
     tags:['garrison','modal','navigate','recall','tabs','sorteren','verdedigers'],
-    depNote:'Kolomvolgorde (E/B/H) en kolomkoppen staan ook in de HTML-headers in index.html. Voeg HTML toe als je kolommen herordent of hernoemt.',
+    depNote:'Kolomvolgorde en kolomkoppen staan ook in html-garrison in index.html. Voeg html-garrison toe als je kolommen aanpast.',
     deps:[] },
-  { id:'wallet',      name:'Wallet',      file:'modules/wallet.js',      size:'~289 r',
+  { id:'wallet',      name:'Wallet',      file:'modules/wallet.js',
     desc:'Wallet koppelen (Slush/Suiet), recall uitvoeren',
     kw:'wallet · Slush · Suiet · recall · DVD NFT · transactie',
     tags:['wallet','slush','suiet','recall','transactie','dvd','blockchain','connect'],
     depNote:'Wallet werkt samen met garrison.js — stuur beide mee bij recall-wijzigingen.',
     deps:['garrison'] },
-  { id:'ui-helpers',  name:'UI Helpers',  file:'modules/ui-helpers.js',  size:'~95 r',
+  { id:'ui-helpers',  name:'UI Helpers',  file:'modules/ui-helpers.js',
     desc:'Lineal, toolbar-dropdowns, compact/top10, zoomindicator',
     kw:'lineaal · ruler · Intel-menu · More-menu · compact · top10',
     tags:['lineaal','ruler','dropdown','compact','top10','menu','intel','more'],
     deps:[] },
-  { id:'leaderboard', name:'Leaderboard', file:'modules/leaderboard.js', size:'~246 r',
+  { id:'leaderboard', name:'Leaderboard', file:'modules/leaderboard.js',
     desc:'Leaderboard (24h/7d trends), mini-profiel popup',
     kw:'leaderboard · ranglijst · trend · mini-profile · 24h · 7d',
     tags:['leaderboard','ranglijst','trend','mini profiel','spelershistorie'],
     deps:[] },
-  { id:'gar-history', name:'Gar History', file:'modules/gar-history.js', size:'~179 r',
+  { id:'gar-history', name:'Gar History', file:'modules/gar-history.js',
     desc:'Garrison History-tab (grafiek) + Raids-tab',
     kw:'history grafiek · raids · loot · aanvalsgeschiedenis',
     tags:['history','grafiek','raids','loot','aanvalsgeschiedenis','garrison tabs'],
     deps:['garrison'] },
-  { id:'sim',         name:'Sim',         file:'modules/sim.js',         size:'~178 r',
+  { id:'sim',         name:'Sim',         file:'modules/sim.js',
     desc:'Monte Carlo gevechtsimulator, aanvalsadviseur',
     kw:'battle sim · aanvalsadvies · winPct · HM BC EF · _atkSim',
     tags:['simulator','battle','aanvalsadvies','winpct','monte carlo','_atkSim'],
     depNote:'sim.js wordt gebruikt door canvas.js, gar-history.js én analyzer.js.',
     deps:[] },
-  { id:'ghost',       name:'Ghost',       file:'modules/ghost.js',       size:'~110 r',
+  { id:'ghost',       name:'Ghost',       file:'modules/ghost.js',
     desc:'Ghost mode — spelers met 1 turf highlighten',
     kw:'ghost mode · 1 turf spelers · pulse overlay',
     tags:['ghost','1 turf','overlay','pulse'],
     depNote:'drawGhostTiles() wordt aangeroepen vanuit drawMap() in canvas.js.',
     deps:[] },
-  { id:'intel',       name:'Intel',       file:'modules/intel.js',       size:'~156 r',
+  { id:'intel',       name:'Intel',       file:'modules/intel.js',
     desc:'Soft Targets-modal + Vendetta Gazette (wekelijks rapport)',
     kw:'soft targets · inactieve spelers · gazette · weekly report',
     tags:['soft targets','inactief','gazette','weekly report','pdf','krant'],
     deps:[] },
-  { id:'profile',     name:'Profile',     file:'modules/profile.js',     size:'~104 r',
+  { id:'profile',     name:'Profile',     file:'modules/profile.js',
     desc:'Mijn profiel-modal (eigen spelers, wallet opslaan)',
     kw:'mijn profiel · wallet adres · speler toevoegen · verwijderen',
     tags:['profiel','mijn profiel','wallet adres','speler toevoegen'],
     deps:[] },
-  { id:'analyzer',    name:'Analyzer',    file:'modules/analyzer.js',    size:'~229 r',
+  { id:'analyzer',    name:'Analyzer',    file:'modules/analyzer.js',
     desc:'Battle Analyzer — analyseer gevecht via SuiVision-URL',
     kw:'battle analyzer · SuiVision URL · last battle · countdown',
     tags:['battle analyzer','suivision','url','last battle','countdown'],
     depNote:'Analyzer gebruikt _atkSim en _armyArray uit sim.js.',
     deps:[] },
-  { id:'css',  name:'CSS',  file:'index.html', size:'~315 r', cssHtml:true, lineRange:'r.12–327',
-    desc:'Alle opmaak — kleuren, knoppen, modals, mobiel responsive',
-    kw:'kleur · knop stijl · layout · modal uiterlijk · responsive · mobiel',
-    tags:['css','kleur','knop','layout','modal','uiterlijk','responsive','mobiel','stijl'],
+
+  // ── CSS blokken (index.html, anker-gebaseerd) ────────────────────────────────
+  { id:'css-base',     name:'CSS Base',     file:'index.html', anchor:'css-base',     cssHtml:true,
+    desc:'Basisopmaak — theme, toolbar, kaart, route, sidebar CSS',
+    kw:'kleur variabelen · toolbar stijl · kaart · sidebar · knoppen',
+    tags:['css','kleur','variabelen','theme','toolbar','kaart','sidebar','knoppen'],
     deps:[] },
-  { id:'html-toolbar',  name:'HTML Toolbar',  file:'index.html', size:'~282 r', cssHtml:true, lineRange:'r.328–609',
-    desc:'Toolbar, kaartgebied, route-paneel, sidebar, spelerslijst-structuur',
-    kw:'toolbar knop · route panel · sidebar · stats · filter · zoekbalk · minimap',
-    tags:['toolbar','knop toevoegen','route panel','sidebar','stats','zoekbalk','minimap'],
+  { id:'css-popups',   name:'CSS Popups',   file:'index.html', anchor:'css-popups',   cssHtml:true,
+    desc:'Popup/modal CSS — buurpopup, rapport, soft targets, profiel, refresh',
+    kw:'popup stijl · modal css · neighbor popup · rapport modal',
+    tags:['css','popup','modal','neighbor','rapport','soft targets','profiel'],
     deps:[] },
-  { id:'html-garrison', name:'HTML Garrison', file:'index.html', size:'~84 r',  cssHtml:true, lineRange:'r.610–693',
-    desc:'Garrison modal HTML — alle tabs (Navigate, History, Raids, Attack, Recall)',
-    kw:'garrison modal · navigate tab · recall tab · kolommen · tabs structuur',
-    tags:['garrison modal','navigate tab','recall tab','kolommen','e b h volgorde','tabs'],
+  { id:'css-mobile',   name:'CSS Mobile',   file:'index.html', anchor:'css-mobile',   cssHtml:true,
+    desc:'Responsive CSS — mobiel, map-only, ticker stijl',
+    kw:'mobiel · responsive · media query · ticker · map-only',
+    tags:['css','mobiel','responsive','media query','ticker'],
     deps:[] },
-  { id:'html-modals',   name:'HTML Modals',   file:'index.html', size:'~163 r', cssHtml:true, lineRange:'r.694–856',
-    desc:'Leaderboard, Battle Analyzer, mini-profile, Soft Targets, rapport, profiel, wallet, refresh',
-    kw:'leaderboard modal · battle analyzer · mini profile · soft targets · rapport · profiel modal · wallet · refresh',
-    tags:['leaderboard modal','battle analyzer','mini profile','soft targets','rapport','profiel modal','wallet modal','refresh modal'],
+  { id:'css-garrison', name:'CSS Garrison', file:'index.html', anchor:'css-garrison', cssHtml:true,
+    desc:'Garrison modal CSS — tabs, kolommen, recall bar stijl',
+    kw:'garrison stijl · tabs css · recall bar · garrison kolommen',
+    tags:['css','garrison','tabs','recall','kolommen'],
+    deps:[] },
+  { id:'css-misc',     name:'CSS Misc',     file:'index.html', anchor:'css-misc',     cssHtml:true,
+    desc:'Overige CSS — wallet modal, lineaal, filters, export, zoom, compact, top10',
+    kw:'wallet css · lineaal stijl · filter stijl · zoom indicator · compact',
+    tags:['css','wallet','lineaal','filter','zoom','compact','top10'],
+    deps:[] },
+
+  // ── HTML blokken (index.html, anker-gebaseerd) ───────────────────────────────
+  { id:'html-toolbar',  name:'HTML Toolbar',  file:'index.html', anchor:'html-toolbar',  cssHtml:true,
+    desc:'Toolbar HTML — knoppen, dropdowns (Intel, More)',
+    kw:'toolbar knop · dropdown · intel menu · more menu · guide knop',
+    tags:['toolbar','knop toevoegen','dropdown','intel','more','guide'],
+    deps:[] },
+  { id:'html-map',      name:'HTML Map',      file:'index.html', anchor:'html-map',      cssHtml:true,
+    desc:'Kaartgebied HTML — ticker, main layout, map canvas, route panel, sidebar, minimap',
+    kw:'ticker · map canvas · route panel · sidebar · minimap · spelerslijst',
+    tags:['ticker','kaart','route panel','sidebar','minimap','spelerslijst'],
+    deps:[] },
+  { id:'html-neighbor', name:'HTML Neighbor', file:'index.html', anchor:'html-neighbor', cssHtml:true,
+    desc:'Buurpopup HTML — aanvalsadvies sectie, buurlijst',
+    kw:'buurpopup · neighbor popup · aanvalsadvies · border count',
+    tags:['buurpopup','neighbor popup','aanvalsadvies'],
+    deps:[] },
+  { id:'html-garrison', name:'HTML Garrison', file:'index.html', anchor:'html-garrison', cssHtml:true,
+    desc:'Garrison modal HTML — tabs, kolomkoppen (H/B/E volgorde), recall sectie',
+    kw:'garrison modal · navigate tab · recall tab · kolommen · H B E volgorde',
+    tags:['garrison modal','navigate tab','recall tab','kolommen','e b h','tabs'],
+    depNote:'Kolomvolgorde hier moet overeenkomen met garrison.js renderGarrisonNavList/renderGarrisonList.',
+    deps:[] },
+  { id:'html-modals',   name:'HTML Modals',   file:'index.html', anchor:'html-modals',   cssHtml:true,
+    desc:'Overige modals HTML — leaderboard, battle analyzer, mini-profile, soft targets, profiel, wallet, refresh',
+    kw:'leaderboard modal · battle analyzer · mini profile · soft targets · profiel modal · wallet · refresh',
+    tags:['leaderboard','battle analyzer','mini profile','soft targets','profiel','wallet','refresh'],
     deps:[] },
 ];
 
 const QUICK_GUIDE = [
-  ['Kleur/stijl knop of tekst',   'css'],
-  ['Knop toevoegen aan toolbar',   'html-toolbar'],
-  ['Nieuwe modal toevoegen',       'html-modals,css'],
-  ['Spelersrij anders weergeven',  'sidebar'],
-  ['Tile-kleur op de kaart',       'canvas-draw'],
-  ['Mobiele weergave aanpassen',   'css'],
-  ['Garrison-tabs aanpassen',      'garrison,html-garrison'],
-  ['Buurpopup aanpassen',          'canvas-neighbor'],
-  ['Aanvalsadvies verbeteren',     'sim'],
-  ['Battle Analyzer uitbreiden',   'analyzer'],
-  ['Soft Targets logica wijzigen', 'intel'],
-  ['Leaderboard / trends',         'leaderboard'],
-  ['Routeberekening',              'route'],
-  ['24h overlay aanpassen',        'battle-hist,canvas-draw'],
-  ['Ghost mode wijzigen',          'ghost,canvas-draw'],
-  ['Recall / wallet',              'garrison,wallet'],
-  ['Data laden / verwerken',       'core'],
-  ['PNG of GIF exporteren',        'export'],
-  ['Raids-overzicht in garrison',  'gar-history'],
-  ['Spelershistorie grafiek',      'gar-history'],
-  ['Ticker (nieuwsband)',          'battle-hist'],
+  ['Kleur variabelen / theme',      'css-base'],
+  ['Knop stijl aanpassen',          'css-base'],
+  ['Knop toevoegen aan toolbar',    'html-toolbar'],
+  ['Toolbar dropdown aanpassen',    'html-toolbar,ui-helpers'],
+  ['Nieuwe modal — HTML',           'html-modals'],
+  ['Nieuwe modal — CSS stijl',      'css-popups'],
+  ['Spelersrij anders weergeven',   'sidebar'],
+  ['Tile-kleur op de kaart',        'canvas'],
+  ['Mobiele weergave aanpassen',    'css-mobile'],
+  ['Garrison-tabs aanpassen',       'garrison,html-garrison'],
+  ['Garrison kolommen (H/B/E)',     'garrison,html-garrison,css-garrison'],
+  ['Buurpopup aanpassen',           'canvas,html-neighbor'],
+  ['Aanvalsadvies verbeteren',      'sim'],
+  ['Battle Analyzer uitbreiden',    'analyzer,html-modals'],
+  ['Soft Targets logica',           'intel,html-modals'],
+  ['Leaderboard / trends',          'leaderboard,html-modals'],
+  ['Routeberekening',               'route'],
+  ['24h overlay aanpassen',         'battle-hist,canvas'],
+  ['Ghost mode wijzigen',           'ghost,canvas'],
+  ['Recall / wallet',               'garrison,wallet'],
+  ['Data laden / verwerken',        'core'],
+  ['PNG of GIF exporteren',         'export'],
+  ['Raids-overzicht in garrison',   'gar-history'],
+  ['Spelershistorie grafiek',       'gar-history'],
+  ['Ticker (nieuwsband)',           'battle-hist,html-map'],
 ];
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -343,15 +378,19 @@ let outputText = '';
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
 function buildGrid(){
-  document.getElementById('module-grid').innerHTML = MODULES.map(m => `
+  document.getElementById('module-grid').innerHTML = MODULES.map(m => {
+    const subtitle = m.anchor
+      ? `index.html [${m.anchor}]`
+      : m.file;
+    return `
     <div class="mod-card${m.cssHtml?' css-html':''}" id="card-${m.id}" onclick="toggleModule('${m.id}')">
-      <div class="mod-card-size">${m.size}</div>
       <div class="mod-card-name">${m.name}</div>
-      <div class="mod-card-file">${m.cssHtml ? m.file+' · '+m.lineRange : m.file}</div>
+      <div class="mod-card-file">${subtitle}</div>
       <div class="mod-card-desc">${m.desc}</div>
       <div class="mod-card-kw">${m.kw}</div>
       <div class="check">✓</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function buildQuickGuide(){
@@ -395,7 +434,7 @@ function updateUI(){
     selList.innerHTML = selMods.map(m =>
       `<div style="display:flex;justify-content:space-between;border-bottom:1px solid #1a1a1a;padding:2px 0">
         <span style="color:var(--gold)">${m.name}</span>
-        <span style="color:var(--dim);font-size:10px">${m.cssHtml?m.lineRange:m.file}</span>
+        <span style="color:var(--dim);font-size:10px">${m.anchor ? '['+m.anchor+']' : m.file}</span>
        </div>`
     ).join('');
   }
@@ -406,16 +445,24 @@ function updateUI(){
   if(warns.length){ dw.style.display=''; dw.innerHTML='<b>⚠ Let op afhankelijkheden:</b><br>'+warns.join('<br>'); }
   else dw.style.display='none';
 
-  // Token estimate
-  const SIZE_TOKENS = {'~168 r':700,'~131 r':550,'~235 r':980,'~180 r':750,'~284 r':1200,'~152 r':640,
-    '~281 r':1180,'~272 r':1140,'~232 r':970,'~289 r':1210,'~95 r':400,
-    '~246 r':1030,'~179 r':750,'~178 r':745,'~110 r':460,'~156 r':655,
-    '~104 r':435,'~229 r':960,'~315 r':1320,'~282 r':1180,'~84 r':350,'~163 r':680};
+  // Token estimate — JS modules: vaste schatting; anchor-blokken: ~500 tokens gemiddeld
+  const JS_TOKENS = {
+    'core':700,'route':550,'canvas':1700,'input':1200,'sidebar':640,
+    'export':1180,'battle-hist':1140,'garrison':970,'wallet':1210,'ui-helpers':400,
+    'leaderboard':1030,'gar-history':750,'sim':745,'ghost':460,'intel':655,
+    'profile':435,'analyzer':960
+  };
+  const ANCHOR_TOKENS = {
+    'css-base':800,'css-popups':600,'css-mobile':400,'css-garrison':500,'css-misc':400,
+    'html-toolbar':300,'html-map':500,'html-neighbor':150,'html-garrison':350,'html-modals':700
+  };
   const req = document.getElementById('request-area').value;
   const tEl = document.getElementById('token-est');
   if(selMods.length){
     let est = 1500 + 300 + Math.round(req.length/4);
-    selMods.forEach(m => est += SIZE_TOKENS[m.size]||800);
+    selMods.forEach(m => {
+      est += m.anchor ? (ANCHOR_TOKENS[m.anchor]||400) : (JS_TOKENS[m.id]||700);
+    });
     const col = est<8000?'var(--green)':est<15000?'var(--gold)':'var(--red)';
     tEl.innerHTML = `Geschat: <span style="color:${col}">~${(est/1000).toFixed(1)}K tokens</span> (was ~30K)`;
   } else {
@@ -453,35 +500,42 @@ async function generate(){
   status.textContent = 'globals-stub.js ophalen…';
   const stub = await fetchFile('./globals-stub.js');
 
-  // File cache — index.html en canvas.js kunnen door meerdere sub-blokken gedeeld worden
-  const fileLineCache = new Map();
+  // ── File cache ────────────────────────────────────────────────────────────────
+  const fileCache = new Map();
   async function fetchLines(file){
-    if(fileLineCache.has(file)) return fileLineCache.get(file);
+    if(fileCache.has(file)) return fileCache.get(file);
     status.textContent = `${file} ophalen…`;
     const text = await fetchFile('./'+file);
-    const lines = text.startsWith('// ⚠') ? null : text.split('\n');
-    fileLineCache.set(file, lines);
+    const lines = text.startsWith('// ⚠') || text.startsWith('<!-- ⚠') ? null : text.split('\n');
+    fileCache.set(file, lines);
     return lines;
   }
 
-  function extractRange(lines, lineRange){
+  // ── Anchor extraction ─────────────────────────────────────────────────────────
+  // CSS anchors:  /* ── BLOCK: name ── */  ...  /* ── END: name ── */
+  // HTML anchors: <!-- ── BLOCK: name ── -->  ...  <!-- ── END: name ── -->
+  function extractAnchor(lines, anchor){
     if(!lines) return null;
-    const match = lineRange.match(/r\.(\d+)[–-](\d+)/);
-    if(!match) return null;
-    const from = parseInt(match[1]) - 1;
-    const to   = parseInt(match[2]);
-    return lines.slice(from, to).join('\n');
+    const startPat = new RegExp(`BLOCK: ${anchor} ──`);
+    const endPat   = new RegExp(`END: ${anchor} ──`);
+    let startIdx = -1, endIdx = -1;
+    for(let i = 0; i < lines.length; i++){
+      if(startPat.test(lines[i]))  startIdx = i;
+      if(endPat.test(lines[i]))  { endIdx = i; break; }
+    }
+    if(startIdx < 0 || endIdx < 0) return null;
+    return lines.slice(startIdx, endIdx + 1).join('\n');
   }
 
   // Fetch each module
   const contents = [];
   for(const m of selMods){
-    if(m.lineRange){
+    if(m.anchor){
       const lines = await fetchLines(m.file);
-      const extracted = extractRange(lines, m.lineRange);
+      const extracted = extractAnchor(lines, m.anchor);
       const text = extracted
         ? extracted
-        : `// ⚠ Kon ${m.file} niet laden — kopieer regels ${m.lineRange} handmatig.`;
+        : `<!-- ⚠ Anker '${m.anchor}' niet gevonden in ${m.file} — controleer of index.html de BLOCK/END markers heeft. -->`;
       contents.push({m, text});
     } else {
       status.textContent = `${m.file} ophalen…`;
@@ -489,14 +543,14 @@ async function generate(){
     }
   }
 
-  // Instructions per module
-  const multiJs = selMods.filter(m=>!m.cssHtml && !m.lineRange).length > 1;
+  // ── Instructions ──────────────────────────────────────────────────────────────
+  const multiJs = selMods.filter(m=>!m.anchor).length > 1;
   const instruct = selMods.map(m => {
-    if(m.cssHtml){
-      return `- Geef de gewijzigde ${m.name}-sectie (${m.lineRange}) terug als downloadbaar bestand — NIET de volledige index.html. Label het duidelijk met de regelnummers.\n- Vermeld daarna expliciet hoe ik het snippet moet plakken in index.html (regelnummers + stappen).`;
-    } else if(m.lineRange){
-      const fname = m.file.split('/').pop();
-      return `- Wijzig sectie ${m.lineRange} in ${m.file} — geef het complete gewijzigde ${fname} terug als download`;
+    if(m.anchor){
+      const isCss = m.anchor.startsWith('css-');
+      const blockStart = isCss ? `/* ── BLOCK: ${m.anchor} ── */` : `<!-- ── BLOCK: ${m.anchor} ── -->`;
+      const blockEnd   = isCss ? `/* ── END: ${m.anchor} ── */`   : `<!-- ── END: ${m.anchor} ── -->`;
+      return `- Geef de gewijzigde ${m.name}-sectie terug als downloadbaar snippet.\n  Vervang in index.html alles tussen (en inclusief) "${blockStart}" en "${blockEnd}".`;
     } else {
       return `- Wijzig ${multiJs?'':'alleen '}${m.file} — geef het complete gewijzigde bestand terug als download`;
     }
@@ -504,13 +558,15 @@ async function generate(){
 
   const depWarns = selMods.filter(m=>m.depNote).map(m=>`⚠ ${m.name}: ${m.depNote}`);
 
-  // Paste instructions for HTML snippets
-  const htmlMods = selMods.filter(m=>m.cssHtml);
-  const pasteInstructions = htmlMods.length
-    ? '\nHOE HET HTML-SNIPPET PLAKKEN IN INDEX.HTML:\n' +
-      htmlMods.map(m => {
-        const pts = m.lineRange.replace('r.','').split('–');
-        return `- ${m.name} (${m.lineRange}): open index.html → Ctrl+G → ${pts[0]} → selecteer t/m regel ${pts[1]} → verwijder selectie → plak het snippet`;
+  // Paste instructions for anchor-based snippets
+  const anchorMods = selMods.filter(m=>m.anchor);
+  const pasteInstructions = anchorMods.length
+    ? '\nHOE HET SNIPPET PLAKKEN IN INDEX.HTML:\n' +
+      anchorMods.map(m => {
+        const isCss = m.anchor.startsWith('css-');
+        const bs = isCss ? `/* ── BLOCK: ${m.anchor} ── */` : `<!-- ── BLOCK: ${m.anchor} ── -->`;
+        const be = isCss ? `/* ── END: ${m.anchor} ── */`   : `<!-- ── END: ${m.anchor} ── -->`;
+        return `- ${m.name}: zoek in index.html naar "${bs}", selecteer t/m "${be}", verwijder de selectie en plak het snippet.`;
       }).join('\n')
     : null;
 
@@ -542,7 +598,7 @@ async function generate(){
     parts.push(
       '',
       '════════════════════════════════════════════════════════',
-      `MODULE: ${m.name.toUpperCase()} — ${m.file}${m.lineRange?' ('+m.lineRange+')':''}`,
+      `MODULE: ${m.name.toUpperCase()} — ${m.anchor ? m.file+' ['+m.anchor+']' : m.file}`,
       '════════════════════════════════════════════════════════',
       '',
       text
