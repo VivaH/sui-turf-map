@@ -136,9 +136,27 @@ function renderGarrisonAttacks(){
   const playerHqd = hqd.filter(d=>d.attacker_pid===garrisonPid||d.defender_pid===garrisonPid)
     .map(d=>({...d, _type:'hqd'}));
 
-  // Merge and sort newest first
-  const allEvents = [...playerRaids, ...playerHqd]
-    .sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+  // Turf captures from snapshot comparison — covers non-raid attacks that don't appear in raids.json.
+  // raids.json only records loot/raid transactions; regular turf captures only show up in changedTiles.
+  const changedTiles = (battleHistoryData&&battleHistoryData.changedTiles)||[];
+  const pidInfo = (battleHistoryData&&battleHistoryData.pidInfo)||new Map();
+  const timeRange = battleHistoryData ? `${battleHistoryData.fromLabel} → ${battleHistoryData.toLabel}` : 'last 24h';
+  const snapshotCaptures = changedTiles
+    .filter(c=>c.type==='captured'&&(c.toPid===garrisonPid||c.fromPid===garrisonPid))
+    .map(c=>{
+      const atkInfo=pidInfo.get(c.toPid)||{};
+      const defInfo=pidInfo.get(c.fromPid)||{};
+      return {
+        _type:'snapshot_capture',
+        attacker_pid:c.toPid, attacker_name:atkInfo.name||'Unknown',
+        defender_pid:c.fromPid, defender_name:defInfo.name||'Unknown',
+        x:c.x, y:c.y, _timeRange:timeRange
+      };
+    });
+
+  // Timestamped events first (newest first), then snapshot captures
+  const timedEvents=[...playerRaids,...playerHqd].sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+  const allEvents=[...timedEvents,...snapshotCaptures];
 
   if(!allEvents.length){
     el.innerHTML='<div style="padding:16px;color:#888;font-size:11px;font-family:var(--font-mono)">No attacks found for this player.<br><span style="color:#777">Attack data is collected from the next run onwards.</span></div>';
@@ -156,6 +174,17 @@ function renderGarrisonAttacks(){
 
   el.innerHTML = allEvents.map(r=>{
     const isAtk = r.attacker_pid===garrisonPid;
+    if(r._type==='snapshot_capture'){
+      // Turf capture from snapshot comparison — no exact timestamp available
+      const rowCls = isAtk?'gar-raid-row as-attacker':'gar-raid-row as-defender';
+      const dir = isAtk
+        ? `<span style="color:#ff8483">⚔ Captured turf</span> from <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`
+        : `<span style="color:#FAC775">⚔ Turf captured by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`;
+      return `<div class="${rowCls}">
+        <div>${dir}</div>
+        <div class="gar-raid-meta" style="color:#555">within ${esc(r._timeRange)}</div>
+      </div>`;
+    }
     if(r._type==='hqd'){
       // HQ destroyed event
       const rowCls = isAtk?'gar-raid-row as-attacker':'gar-raid-row as-defender';
