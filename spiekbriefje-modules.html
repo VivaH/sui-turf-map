@@ -75,6 +75,12 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);min-height:1
 #gen-btn:disabled{opacity:.35;cursor:default;transform:none;box-shadow:none}
 #gen-status{font-size:10px;color:var(--dim);margin-top:6px;min-height:14px;text-align:center}
 
+/* ── Mode toggle ── */
+#mode-toggle{display:flex;gap:0;margin-bottom:10px;border:2px solid var(--border);overflow:hidden}
+.mode-btn{flex:1;padding:5px 8px;font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;cursor:pointer;border:none;background:transparent;color:var(--dim);box-shadow:none;border-radius:0;transition:all .1s}
+.mode-btn:hover{color:#aaa;background:#161616}
+.mode-btn.active{background:var(--gold);color:#000}
+
 /* ── Output modal ── */
 #output-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
 #output-modal.open{display:flex}
@@ -136,7 +142,7 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);min-height:1
 <div id="hdr">
   <h1>VWM Pakketje Maker</h1>
   <div id="hdr-sub">Selecteer modules → typ verzoek → genereer kant-en-klare Claude-prompt</div>
-  <div id="ver-badge">v1.00</div>
+  <div id="ver-badge">v1.01</div>
 </div>
 
 <div id="app">
@@ -227,6 +233,10 @@ body{font-family:var(--mono);background:var(--bg);color:var(--text);min-height:1
         <div id="output-head-meta"></div>
       </div>
       <div id="output-actions">
+        <div id="mode-toggle">
+          <button class="mode-btn active" id="mode-claude" onclick="setMode('claude')">claude.ai</button>
+          <button class="mode-btn" id="mode-vscode" onclick="setMode('vscode')">Claude Code</button>
+        </div>
         <button class="out-btn" id="copy-btn" onclick="copyOutput()">⧉ Kopieer alles</button>
         <button class="out-btn" id="dl-btn" onclick="downloadOutput()">⬇ Download .txt</button>
         <button class="out-btn" id="close-btn" onclick="closeOutput()">✕ Sluiten</button>
@@ -424,6 +434,18 @@ const QUICK_GUIDE = [
 // ── State ─────────────────────────────────────────────────────────────────────
 const selected = new Set();
 let outputText = '';
+let outputMode = 'claude'; // 'claude' | 'vscode'
+
+function setMode(mode){
+  outputMode = mode;
+  document.getElementById('mode-claude').classList.toggle('active', mode==='claude');
+  document.getElementById('mode-vscode').classList.toggle('active', mode==='vscode');
+  // Update button labels
+  document.getElementById('copy-btn').textContent = '⧉ Kopieer alles';
+  document.getElementById('dl-btn').textContent = mode==='vscode' ? '⬇ Download .txt' : '⬇ Download .txt';
+  // Rebuild output if already generated
+  if(outputText) buildOutput();
+}
 
 // ── Build UI ──────────────────────────────────────────────────────────────────
 function buildGrid(){
@@ -535,6 +557,9 @@ async function fetchFile(url){
 }
 
 // ── Generate ──────────────────────────────────────────────────────────────────
+// ── Collected data from last generate run ────────────────────────────────────
+let _lastGenData = null;
+
 async function generate(){
   const req = document.getElementById('request-area').value.trim();
   const selMods = [...selected].map(id=>MODULES.find(x=>x.id===id)).filter(Boolean);
@@ -544,7 +569,7 @@ async function generate(){
   const status = document.getElementById('gen-status');
   btn.disabled = true;
 
-  const ver = document.getElementById('ver-badge').textContent || 'v4.00';
+  const ver = document.getElementById('ver-badge').textContent || 'v1.01';
 
   // Fetch globals stub
   status.textContent = 'globals-stub.js ophalen…';
@@ -562,8 +587,6 @@ async function generate(){
   }
 
   // ── Anchor extraction ─────────────────────────────────────────────────────────
-  // CSS anchors:  /* ── BLOCK: name ── */  ...  /* ── END: name ── */
-  // HTML anchors: <!-- ── BLOCK: name ── -->  ...  <!-- ── END: name ── -->
   function extractAnchor(lines, anchor){
     if(!lines) return null;
     const startPat = new RegExp(`BLOCK: ${anchor} ──`);
@@ -593,81 +616,132 @@ async function generate(){
     }
   }
 
-  // ── Instructions ──────────────────────────────────────────────────────────────
-  const multiJs = selMods.filter(m=>!m.anchor).length > 1;
-  const instruct = selMods.map(m => {
-    if(m.anchor){
-      const isCss = m.anchor.startsWith('css-');
-      const blockStart = isCss ? `/* ── BLOCK: ${m.anchor} ── */` : `<!-- ── BLOCK: ${m.anchor} ── -->`;
-      const blockEnd   = isCss ? `/* ── END: ${m.anchor} ── */`   : `<!-- ── END: ${m.anchor} ── -->`;
-      return `- Geef de gewijzigde ${m.name}-sectie terug als downloadbaar snippet (inclusief de BLOCK/END ankerregels).\n- Vermeld EXPLICIET in je antwoord: "Vervang in index.html alles tussen ${blockStart} en ${blockEnd} met dit snippet."`;
-    } else {
-      return `- Wijzig ${multiJs?'':'alleen '}${m.file} — geef het complete gewijzigde bestand terug als download`;
-    }
-  }).join('\n');
-
-  const depWarns = selMods.filter(m=>m.depNote).map(m=>`⚠ ${m.name}: ${m.depNote}`);
-
-  // Paste instructions for anchor-based snippets
-  const anchorMods = selMods.filter(m=>m.anchor);
-  const pasteInstructions = anchorMods.length
-    ? '\nHOE INDEX.HTML AANPASSEN (verplicht te vermelden in je antwoord):\n' +
-      anchorMods.map(m => {
-        const isCss = m.anchor.startsWith('css-');
-        const bs = isCss ? `/* ── BLOCK: ${m.anchor} ── */` : `<!-- ── BLOCK: ${m.anchor} ── -->`;
-        const be = isCss ? `/* ── END: ${m.anchor} ── */`   : `<!-- ── END: ${m.anchor} ── -->`;
-        return `- ${m.name}: open index.html → zoek naar "${bs}" → selecteer t/m "${be}" → verwijder → plak het snippet.`;
-      }).join('\n')
-    : null;
-
-  // Assemble
-  const parts = [
-    `════════════════════════════════════════════════════════`,
-    `VENDETTA WORLD MAP — WIJZIGINGSVERZOEK`,
-    `Versie: ${ver}  ·  Modules: ${selMods.map(m=>m.name).join(', ')}`,
-    `════════════════════════════════════════════════════════`,
-    '',
-    'VERZOEK:',
-    req,
-    '',
-    'INSTRUCTIES:',
-    instruct,
-    '- Versienummer NIET ophogen (dat doe ik zelf in index.html)',
-    '- Commitbericht in het Engels',
-    '- Als het verzoek onduidelijk is of meerdere interpretaties heeft: stel eerst een verduidelijkingsvraag voor je begint met implementeren.',
-    depWarns.length ? '\nLET OP AFHANKELIJKHEDEN:\n'+depWarns.join('\n') : null,
-    pasteInstructions,
-    '',
-    '════════════════════════════════════════════════════════',
-    'GLOBALS-STUB (globals-stub.js — gedeelde state van alle modules)',
-    '════════════════════════════════════════════════════════',
-    '',
-    stub,
-  ];
-
-  for(const {m,text} of contents){
-    parts.push(
-      '',
-      '════════════════════════════════════════════════════════',
-      `MODULE: ${m.name.toUpperCase()} — ${m.anchor ? m.file+' ['+m.anchor+']' : m.file}`,
-      '════════════════════════════════════════════════════════',
-      '',
-      text
-    );
-  }
-
-  outputText = parts.filter(p=>p!==null).join('\n');
-
-  // Show output modal
-  document.getElementById('output-text').textContent = outputText;
-  document.getElementById('output-head-meta').textContent =
-    `${selMods.length} module${selMods.length>1?'s':''} · ~${Math.round(outputText.length/4).toLocaleString()} tokens`;
-  document.getElementById('out-tokens').textContent =
-    `${outputText.split('\n').length} regels · ~${Math.round(outputText.length/4).toLocaleString()} tokens`;
-  document.getElementById('output-modal').classList.add('open');
+  // Store for mode switching
+  _lastGenData = {req, selMods, ver, stub, contents};
+  buildOutput();
 
   btn.disabled = false;
   status.textContent = '';
+}
+
+function buildOutput(){
+  if(!_lastGenData) return;
+  const {req, selMods, ver, stub, contents} = _lastGenData;
+
+  if(outputMode === 'vscode'){
+    // ── Claude Code mode: compact @-prompt ──────────────────────────────────
+    const atRefs = ['@globals-stub.js'];
+    selMods.forEach(m => {
+      if(!m.anchor) atRefs.push(`@${m.file}`);
+    });
+    // For anchor blocks: reference index.html
+    if(selMods.some(m=>m.anchor)) atRefs.push('@index.html');
+
+    const anchorMods = selMods.filter(m=>m.anchor);
+    const anchorInstruct = anchorMods.map(m => {
+      const isCss = m.anchor.startsWith('css-');
+      const bs = isCss ? `/* ── BLOCK: ${m.anchor} ── */` : `<!-- ── BLOCK: ${m.anchor} ── -->`;
+      const be = isCss ? `/* ── END: ${m.anchor} ── */`   : `<!-- ── END: ${m.anchor} ── -->`;
+      return `- ${m.name}: vervang in index.html alles tussen "${bs}" en "${be}" met het gewijzigde snippet.`;
+    }).join('\n');
+
+    const jsInstruct = selMods.filter(m=>!m.anchor).map(m =>
+      `- Wijzig ${m.file} direct in de editor`
+    ).join('\n');
+
+    const depWarns = selMods.filter(m=>m.depNote).map(m=>`⚠ ${m.name}: ${m.depNote}`);
+
+    outputText = [
+      '── CONTEXT (plak dit in Claude Code) ──',
+      atRefs.join('\n'),
+      '',
+      '── VERZOEK ──',
+      req,
+      '',
+      '── INSTRUCTIES ──',
+      jsInstruct,
+      anchorInstruct,
+      '- Versienummer NIET ophogen (dat doe ik zelf in index.html)',
+      '- Commitbericht in het Engels',
+      '- Als onduidelijk: stel eerst een verduidelijkingsvraag',
+      depWarns.length ? '\nLET OP:\n'+depWarns.join('\n') : null,
+    ].filter(p=>p!==null).join('\n');
+
+  } else {
+    // ── Claude.ai mode: volledig pakketje ───────────────────────────────────
+    const multiJs = selMods.filter(m=>!m.anchor).length > 1;
+    const instruct = selMods.map(m => {
+      if(m.anchor){
+        const isCss = m.anchor.startsWith('css-');
+        const blockStart = isCss ? `/* ── BLOCK: ${m.anchor} ── */` : `<!-- ── BLOCK: ${m.anchor} ── -->`;
+        const blockEnd   = isCss ? `/* ── END: ${m.anchor} ── */`   : `<!-- ── END: ${m.anchor} ── -->`;
+        return `- Geef de gewijzigde ${m.name}-sectie terug als downloadbaar snippet (inclusief de BLOCK/END ankerregels).\n- Vermeld EXPLICIET in je antwoord: "Vervang in index.html alles tussen ${blockStart} en ${blockEnd} met dit snippet."`;
+      } else {
+        return `- Wijzig ${multiJs?'':'alleen '}${m.file} — geef het complete gewijzigde bestand terug als download`;
+      }
+    }).join('\n');
+
+    const depWarns = selMods.filter(m=>m.depNote).map(m=>`⚠ ${m.name}: ${m.depNote}`);
+    const anchorMods = selMods.filter(m=>m.anchor);
+    const pasteInstructions = anchorMods.length
+      ? '\nHOE INDEX.HTML AANPASSEN (verplicht te vermelden in je antwoord):\n' +
+        anchorMods.map(m => {
+          const isCss = m.anchor.startsWith('css-');
+          const bs = isCss ? `/* ── BLOCK: ${m.anchor} ── */` : `<!-- ── BLOCK: ${m.anchor} ── -->`;
+          const be = isCss ? `/* ── END: ${m.anchor} ── */`   : `<!-- ── END: ${m.anchor} ── -->`;
+          return `- ${m.name}: open index.html → zoek naar "${bs}" → selecteer t/m "${be}" → verwijder → plak het snippet.`;
+        }).join('\n')
+      : null;
+
+    const parts = [
+      `════════════════════════════════════════════════════════`,
+      `VENDETTA WORLD MAP — WIJZIGINGSVERZOEK`,
+      `Versie: ${ver}  ·  Modules: ${selMods.map(m=>m.name).join(', ')}`,
+      `════════════════════════════════════════════════════════`,
+      '',
+      'VERZOEK:',
+      req,
+      '',
+      'INSTRUCTIES:',
+      instruct,
+      '- Versienummer NIET ophogen (dat doe ik zelf in index.html)',
+      '- Commitbericht in het Engels',
+      '- Als het verzoek onduidelijk is of meerdere interpretaties heeft: stel eerst een verduidelijkingsvraag voor je begint met implementeren.',
+      depWarns.length ? '\nLET OP AFHANKELIJKHEDEN:\n'+depWarns.join('\n') : null,
+      pasteInstructions,
+      '',
+      `════════════════════════════════════════════════════════`,
+      'GLOBALS-STUB (globals-stub.js — gedeelde state van alle modules)',
+      `════════════════════════════════════════════════════════`,
+      '',
+      stub,
+    ];
+
+    for(const {m,text} of contents){
+      parts.push(
+        '',
+        `════════════════════════════════════════════════════════`,
+        `MODULE: ${m.name.toUpperCase()} — ${m.anchor ? m.file+' ['+m.anchor+']' : m.file}`,
+        `════════════════════════════════════════════════════════`,
+        '',
+        text
+      );
+    }
+    outputText = parts.filter(p=>p!==null).join('\n');
+  }
+
+  // Show output modal
+  document.getElementById('output-text').textContent = outputText;
+  const modeLabel = outputMode==='vscode' ? 'Claude Code prompt' : `${selMods.length} module${selMods.length>1?'s':''}`;
+  document.getElementById('output-head-meta').textContent =
+    `${modeLabel} · ~${Math.round(outputText.length/4).toLocaleString()} tokens`;
+  document.getElementById('out-tokens').textContent =
+    `${outputText.split('\n').length} regels · ~${Math.round(outputText.length/4).toLocaleString()} tokens`;
+  document.getElementById('output-footer').firstElementChild.textContent =
+    outputMode==='vscode'
+      ? 'Plak dit direct in Claude Code (VS Code).'
+      : 'Plak dit in Claude.ai als één bericht — of upload de .txt als bijlage.';
+  document.getElementById('output-modal').classList.add('open');
 }
 
 function copyOutput(){
@@ -679,14 +753,15 @@ function copyOutput(){
 }
 
 function downloadOutput(){
-  const ver = document.getElementById('ver-badge').textContent.replace(/\s/g,'') || 'v4.00';
+  const ver = document.getElementById('ver-badge').textContent.replace(/\s/g,'') || 'v1.01';
   const mods = [...selected].join('-');
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
   const dt = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+  const suffix = outputMode==='vscode' ? 'vscode' : 'claude';
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([outputText],{type:'text/plain'}));
-  a.download = `vwm-verzoek-${ver}-${mods}-${dt}.txt`;
+  a.download = `vwm-verzoek-${ver}-${suffix}-${mods}-${dt}.txt`;
   a.click();
 }
 
