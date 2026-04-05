@@ -142,14 +142,15 @@ function renderGarrisonAttacks(){
   const pidInfo = (battleHistoryData&&battleHistoryData.pidInfo)||new Map();
   const timeRange = battleHistoryData ? `${battleHistoryData.fromLabel} → ${battleHistoryData.toLabel}` : 'last 24h';
   const snapshotCaptures = changedTiles
-    .filter(c=>c.type==='captured'&&(c.toPid===garrisonPid||c.fromPid===garrisonPid))
+    .filter(c=>(c.type==='captured'||c.type==='new')&&(c.toPid===garrisonPid||c.fromPid===garrisonPid))
     .map(c=>{
       const atkInfo=pidInfo.get(c.toPid)||{};
       const defInfo=pidInfo.get(c.fromPid)||{};
       return {
         _type:'snapshot_capture',
         attacker_pid:c.toPid, attacker_name:atkInfo.name||'Unknown',
-        defender_pid:c.fromPid, defender_name:defInfo.name||'Unknown',
+        defender_pid:c.fromPid||null, defender_name:defInfo.name||null,
+        isClaim:c.type==='new',
         x:c.x, y:c.y, _timeRange:timeRange
       };
     });
@@ -177,9 +178,16 @@ function renderGarrisonAttacks(){
     if(r._type==='snapshot_capture'){
       // Turf capture from snapshot comparison — no exact timestamp available
       const rowCls = isAtk?'gar-raid-row as-attacker':'gar-raid-row as-defender';
-      const dir = isAtk
-        ? `<span style="color:#ff8483">⚔ Captured turf</span> from <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`
-        : `<span style="color:#FAC775">⚔ Turf captured by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`;
+      let dir;
+      if(r.isClaim && isAtk){
+        dir=`<span style="color:#6fffa9">📍 Claimed free turf</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`;
+      } else if(r.isClaim){
+        dir=`<span style="color:#FAC775">📍 Free turf claimed by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`;
+      } else if(isAtk){
+        dir=`<span style="color:#ff8483">⚔ Captured turf</span> from <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`;
+      } else {
+        dir=`<span style="color:#FAC775">⚔ Turf captured by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span> <span style="color:#999;font-size:9px">(${r.x},${r.y})</span>`;
+      }
       return `<div class="${rowCls}">
         <div>${dir}</div>
         <div class="gar-raid-meta" style="color:#555">within ${esc(r._timeRange)}</div>
