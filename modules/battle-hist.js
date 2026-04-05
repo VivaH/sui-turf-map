@@ -109,6 +109,11 @@ async function loadBattleHistory(){
     const ftar=await fetch('free_turf_attacks.json?t='+Date.now());
     if(ftar.ok) battleHistoryData.freeTurfAttacks=await ftar.json();
   }catch(e){}
+  // Load plain owned turf attacks (CaptureEvent without RaidEvent — no loot)
+  try{
+    const otar=await fetch('owned_turf_attacks.json?t='+Date.now());
+    if(otar.ok) battleHistoryData.ownedTurfAttacks=await otar.json();
+  }catch(e){}
   // Load HQ destroyed events
   try{
     const hqdr=await fetch('hq_destroyed.json?t='+Date.now());

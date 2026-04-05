@@ -797,23 +797,60 @@ for event_type in RAID_EVENT_TYPES:
 
 new_raids = list(new_raids_by_digest.values())
 
-# ── CAPTURE CROSS-REFERENCE ───────────────────────────────────────────────────
-# Fetch CaptureEvent TX digests and mark matching raids as is_capture=True.
-# This covers all raids (new + existing) without requiring per-TX backfill calls.
+# ── CAPTURE CROSS-REFERENCE + OWNED TURF ATTACK TRACKING ─────────────────────
+# CaptureEvent fires for EVERY turf ownership change:
+#   - raid + capture  → RaidEvent + CaptureEvent in same TX  (already in raids.json)
+#   - plain attack    → CaptureEvent only, no RaidEvent      (new: owned_turf_attacks.json)
+# We fetch CaptureEvent with full parsedJson, do the raid cross-ref as before,
+# and store plain captures (no matching raid digest) in owned_turf_attacks.json.
 print("  Cross-referencing CaptureEvents...")
+
+OWNED_TURF_FILE = "owned_turf_attacks.json"
+MAX_OWNED_TURF  = 500
+
 try:
-    capture_digests = set()
-    cap_cursor = None
+    existing_ota = json.loads(open(OWNED_TURF_FILE, encoding="utf-8").read())
+except Exception:
+    existing_ota = []
+
+known_ota_digests = {r["digest"] for r in existing_ota if r.get("digest")}
+
+# raid digests set — for dedup against raids.json
+all_raid_digests = {r["digest"] for r in existing_raids + new_raids if r.get("digest")}
+
+capture_digests   = set()
+new_ota_by_digest = {}
+cap_cursor        = None
+try:
     for _ in range(10):  # up to 500 CaptureEvents
         result = rpc("suix_queryEvents", [{"MoveEventType": CAPTURE_EVENT_TYPE}, cap_cursor, 50, True])
         for ev in (result.get("data") or []):
-            d = ev.get("id", {}).get("txDigest", "")
-            if d:
-                capture_digests.add(d)
+            parsed = ev.get("parsedJson") or {}
+            tx     = ev.get("id", {}).get("txDigest", "")
+            if not tx:
+                continue
+            capture_digests.add(tx)
+            # Only store if new and not already covered by a raid entry
+            if tx in known_ota_digests or tx in new_ota_by_digest:
+                continue
+            if tx in all_raid_digests:
+                continue  # raid+capture — already in raids.json
+            ts_ms = ev.get("timestampMs") or parsed.get("timestamp")
+            ts    = datetime.fromtimestamp(int(ts_ms)/1000, tz=timezone.utc).isoformat() if ts_ms else now_utc.isoformat()
+            new_ota_by_digest[tx] = {
+                "digest":        tx,
+                "attacker_pid":  parsed.get("attacker_id")   or "",
+                "attacker_name": parsed.get("attacker_name") or "",
+                "defender_pid":  parsed.get("defender_id")   or "",
+                "defender_name": parsed.get("defender_name") or "",
+                "turf_id":       parsed.get("turf_id")       or "",
+                "timestamp":     ts,
+            }
         if not result.get("hasNextPage"):
             break
         cap_cursor = result.get("nextCursor")
         time.sleep(DELAY)
+
     marked = 0
     for r in new_raids + existing_raids:
         if r.get("digest") in capture_digests:
@@ -822,9 +859,24 @@ try:
                 marked += 1
         else:
             r["is_capture"] = False
-    print(f"  CaptureEvent digests: {len(capture_digests)}, raids updated: {marked}")
+    print(f"  CaptureEvent digests: {len(capture_digests)}, raids updated: {marked}, plain captures new: {len(new_ota_by_digest)}")
+
+    new_ota = list(new_ota_by_digest.values())
+    if new_ota:
+        all_ota = existing_ota + new_ota
+        all_ota.sort(key=lambda r: r["timestamp"])
+        all_ota = all_ota[-MAX_OWNED_TURF:]
+        with open(OWNED_TURF_FILE, "w", encoding="utf-8") as f:
+            json.dump(all_ota, f, separators=(",", ":"), ensure_ascii=False)
+        print(f"  owned_turf_attacks.json updated ({len(all_ota)} total, {len(new_ota)} new)")
+    else:
+        if not existing_ota:
+            with open(OWNED_TURF_FILE, "w", encoding="utf-8") as f:
+                json.dump([], f)
+        print("  No new plain capture events found")
+
 except Exception as e:
-    print(f"  Warning: CaptureEvent cross-reference failed: {e}")
+    print(f"  Warning: CaptureEvent processing failed: {e}")
 
 if not new_raids and not any(r.get("xp", 0) > 0 for r in existing_raids):
     print("  No new raid events found")

@@ -132,6 +132,7 @@ function renderGarrisonAttacks(){
   const hqd            = (battleHistoryData&&battleHistoryData.hqDestroyed)||[];
   const hqCaptures     = (battleHistoryData&&battleHistoryData.hqCaptures)||[];
   const freeTurfAtks   = (battleHistoryData&&battleHistoryData.freeTurfAttacks)||[];
+  const ownedTurfAtks  = (battleHistoryData&&battleHistoryData.ownedTurfAttacks)||[];
 
   const playerRaids = raids.filter(r=>r.attacker_pid===garrisonPid||r.defender_pid===garrisonPid);
 
@@ -150,9 +151,11 @@ function renderGarrisonAttacks(){
     .filter(f=>f.attacker_pid===garrisonPid)
     .map(f=>({...f, _type:'fta'}));
 
-  // Digest set of free turf attacks already covered by exact blockchain data,
-  // used to suppress the snapshot fallback for the same tile change.
-  const ftaDigests = new Set(playerFta.map(f=>f.digest));
+  // Plain owned turf attacks — CaptureEvent without RaidEvent (no loot).
+  // attacker_pid or defender_pid can match.
+  const playerOta = ownedTurfAtks
+    .filter(o=>o.attacker_pid===garrisonPid||o.defender_pid===garrisonPid)
+    .map(o=>({...o, _type:'ota'}));
 
   // Snapshot fallback — covers plain attacks on occupied turfs (no raid loot) that
   // don't appear in any JSON file, and free turf claims not yet in free_turf_attacks.json.
@@ -172,7 +175,7 @@ function renderGarrisonAttacks(){
   const snapshotEvents = changedTiles
     .filter(c=>(c.type==='captured'||c.type==='new')&&(c.toPid===garrisonPid||c.fromPid===garrisonPid))
     .filter(c=>{
-      if(c.type==='captured') return !raidCapturePairs.has(`${c.toPid}|${c.fromPid}`);
+      if(c.type==='captured') return !raidCapturePairs.has(`${c.toPid}|${c.fromPid}`) && playerOta.length===0;
       // type==='new': only show if we have no exact blockchain record for this player's free turf attacks
       if(c.type==='new') return playerFta.length===0;
       return true;
@@ -191,7 +194,7 @@ function renderGarrisonAttacks(){
     });
 
   // Merge all event types and sort chronologically (newest first).
-  const allEvents=[...playerRaids,...playerHqd,...playerHqCap,...playerFta,...snapshotEvents]
+  const allEvents=[...playerRaids,...playerHqd,...playerHqCap,...playerFta,...playerOta,...snapshotEvents]
     .sort((a,b)=>(b._ts||new Date(b.timestamp).getTime())-(a._ts||new Date(a.timestamp).getTime()));
 
   if(!allEvents.length){
@@ -219,6 +222,17 @@ function renderGarrisonAttacks(){
       return `<div class="gar-raid-row as-attacker">
         <div><span style="color:#6fffa9">📍 Attacked free turf</span></div>
         <div class="gar-raid-loot">${result}${armyParts?` · ${esc(armyParts)}`:''}</div>
+        <div class="gar-raid-meta">${fmtAge(r.timestamp)}</div>
+      </div>`;
+    }
+    if(r._type==='ota'){
+      // Plain owned turf attack — CaptureEvent, no loot (no RaidEvent in same TX)
+      const rowCls = isAtk?'gar-raid-row as-attacker':'gar-raid-row as-defender';
+      const dir = isAtk
+        ? `<span style="color:#ff8483">⚔ Captured turf</span> from <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span>`
+        : `<span style="color:#FAC775">⚔ Turf captured by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span>`;
+      return `<div class="${rowCls}">
+        <div>${dir}</div>
         <div class="gar-raid-meta">${fmtAge(r.timestamp)}</div>
       </div>`;
     }
