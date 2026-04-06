@@ -74,8 +74,14 @@ function _renderGarSortIndicators(){
   if(navResetBtn) navResetBtn.style.display=isDefault?'none':'';
 
   // Helper: label for a col
-  function colLabel(col){ return col==='EF'?'E':col==='BC'?'B':col==='HM'?'H':'Total'; }
-  function colColor(col){ return col==='EF'?'#ff8483':col==='BC'?'#89c6ff':col==='HM'?'#aaa':'#ccc'; }
+  function colLabel(col){
+    const wide=window.innerWidth>=601;
+    if(col==='EF') return wide?'Enforcer':'E';
+    if(col==='BC') return wide?'Bouncer':'B';
+    if(col==='HM') return wide?'Henchman':'H';
+    return 'Total';
+  }
+  function colColor(col){ return col==='EF'?'#ff8483':col==='BC'?'#6fffa9':col==='HM'?'#aaa':'#ccc'; }
 
   // Update nav header
   const navHead=document.getElementById('gar-nav-head');

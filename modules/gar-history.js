@@ -77,7 +77,7 @@ function renderGarrisonHistory(){
     <span>Turf count — last ${n} snapshots</span>
     <span style="color:${diffCol}">${diffStr} turfs vs ${labels[0]||'start'}</span>
   </div>
-  <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:auto;display:block">
+  <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:100%;height:auto;display:block">
     ${yTicks.map(v=>{const y=PAD.t+cH-(v-minV)/range*cH;return `<line x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W-PAD.r}" y2="${y.toFixed(1)}" stroke="#1a1a1a" stroke-dasharray="3,3"/>`;}).join('')}
     <line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+cH}" stroke="#333"/>
     <line x1="${PAD.l}" y1="${PAD.t+cH}" x2="${W-PAD.r}" y2="${PAD.t+cH}" stroke="#333"/>
@@ -112,7 +112,7 @@ function renderGarrisonHistory(){
       <span>Garrison — last ${gn} snapshots</span>
       <span style="color:${gdiffCol}">${gdiffStr} units vs ${garLabels[0]||'start'}</span>
     </div>
-    <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:${W}px;height:auto;display:block">
+    <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:100%;height:auto;display:block">
       ${gyTicks.map(v=>{const y=PAD.t+cH-(v-gminV)/grange*cH;return `<line x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W-PAD.r}" y2="${y.toFixed(1)}" stroke="#1a1a1a" stroke-dasharray="3,3"/>`;}).join('')}
       <line x1="${PAD.l}" y1="${PAD.t}" x2="${PAD.l}" y2="${PAD.t+cH}" stroke="#333"/>
       <line x1="${PAD.l}" y1="${PAD.t+cH}" x2="${W-PAD.r}" y2="${PAD.t+cH}" stroke="#333"/>
@@ -215,13 +215,14 @@ function renderGarrisonAttacks(){
     const isAtk = r.attacker_pid===garrisonPid;
     if(r._type==='fta'){
       // Free turf attack — exact timestamp from blockchain
-      const armyParts=Object.entries(r.army||{}).map(([n,c])=>`${c}× ${n}`).join(', ');
+      function unitColor(n){const l=n.toLowerCase();return l.includes('enforcer')?'#ff8483':l.includes('bouncer')?'#6fffa9':l.includes('henchman')?'#aaa':'#ccc';}
+      const armyParts=Object.entries(r.army||{}).map(([n,c])=>`${c}× <span style="color:${unitColor(n)}">${esc(n)}</span>`).join(', ');
       const result=r.won
         ?`<span style="color:#6fffa9">Turf claimed</span>`
         :`<span style="color:#ff8483">Attack failed</span>`;
       return `<div class="gar-raid-row as-attacker">
         <div><span style="color:#6fffa9">📍 Attacked free turf</span></div>
-        <div class="gar-raid-loot">${result}${armyParts?` · ${esc(armyParts)}`:''}</div>
+        <div class="gar-raid-loot">${result}${armyParts?` · ${armyParts}`:''}</div>
         <div class="gar-raid-meta">${fmtAge(r.timestamp)}</div>
       </div>`;
     }
