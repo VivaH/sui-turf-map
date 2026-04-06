@@ -289,8 +289,8 @@ function renderGarrisonAttacks(){
         dir        = `<span style="color:#ff8483">⚔ Attacked</span> <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span>`;
         resultLine = `<div class="gar-raid-loot"><span style="color:#6fffa9">Captured turf</span></div>`;
       } else if(captured && looted){
-        dir        = `<span style="color:#ff8483">⚔ Raided + Captured</span> <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span>`;
-        resultLine = `<div class="gar-raid-loot">Looted: ${fmtLoot(r)} · <span style="color:#6fffa9">captured turf</span></div>`;
+        dir        = `<span style="color:#ff8483">⚔ Raided + attacked</span> <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span>`;
+        resultLine = `<div class="gar-raid-loot">Looted: ${fmtLoot(r)} · <span style="color:#6fffa9">Captured turf</span></div>`;
       } else {
         dir        = `<span style="color:#ff8483">⚔ Raided</span> <span style="color:#aaa">${esc(r.defender_name||'Unknown')}</span>`;
         resultLine = `<div class="gar-raid-loot">Looted: ${looted?fmtLoot(r):'<span style="color:#777">nothing</span>'}</div>`;
@@ -301,7 +301,7 @@ function renderGarrisonAttacks(){
         resultLine = `<div class="gar-raid-loot"><span style="color:#ff8483">Lost turf</span></div>`;
       } else if(captured && looted){
         dir        = `<span style="color:#FAC775">⚔ Raided + captured by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span>`;
-        resultLine = `<div class="gar-raid-loot">Lost: ${fmtLoot(r)} · <span style="color:#ff8483">lost turf</span></div>`;
+        resultLine = `<div class="gar-raid-loot">Lost: ${fmtLoot(r)} · <span style="color:#ff8483">Lost turf</span></div>`;
       } else {
         dir        = `<span style="color:#89c6ff">🛡 Raided by</span> <span style="color:#aaa">${esc(r.attacker_name||'Unknown')}</span>`;
         resultLine = `<div class="gar-raid-loot">Lost: ${looted?fmtLoot(r):'<span style="color:#777">nothing</span>'}</div>`;
