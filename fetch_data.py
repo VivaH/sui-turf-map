@@ -117,6 +117,20 @@ if not real_pids:
 print(f"  Profile IDs: {len(real_pids)}")
 
 # ── STEP 2: Player profiles ────────────────────────────────────────────────────
+def extract_vecmap(raw):
+    """Extract a Sui VecMap fields dict to a flat Python dict {key: int}."""
+    result = {}
+    if not isinstance(raw, dict):
+        return result
+    contents = raw.get("fields", {}).get("contents", [])
+    for entry in contents:
+        ef = entry.get("fields", {}) if isinstance(entry, dict) else {}
+        k = ef.get("key")
+        v = ef.get("value")
+        if k:
+            result[k] = int(v) if v is not None else 0
+    return result
+
 print("Step 2/4: Loading player profiles...")
 profiles = {}
 
@@ -129,11 +143,15 @@ for i in range(0, len(real_pids), BATCH):
         f = ((obj.get("data") or {}).get("content") or {}).get("fields")
         if not f: continue
         pid = obj["data"]["objectId"]
+        timers = extract_vecmap(f.get("timers"))
+        perks  = extract_vecmap(f.get("perks"))
         profiles[pid] = {
-            "name":       f.get("player_name", ""),
-            "wallet":     f.get("player_address", ""),
-            "isInactive": f.get("is_inactive") in (True, "true"),
-            "hqTile":     f.get("headquarter_tile"),
+            "name":         f.get("player_name", ""),
+            "wallet":       f.get("player_address", ""),
+            "isInactive":   f.get("is_inactive") in (True, "true"),
+            "hqTile":       f.get("headquarter_tile"),
+            "feedDeadline": timers.get("feed_people", 0),
+            "boostUntil":   perks.get("boost_production", 0),
         }
     if i % 2000 == 0 and i > 0: print(f"  {i}/{len(real_pids)} profiles loaded")
     time.sleep(DELAY)
@@ -215,7 +233,7 @@ for i in range(0, len(tile_ids), BATCH):
                 elif k == "enforcer": g_e = v
         raw_tiles.append({"x": x, "y": y, "pid": pid, "hq": tile_id in hq_set,
                           "g_h": g_h, "g_b": g_b, "g_e": g_e,
-                          "oid": tile_id if (g_h or g_b or g_e or tile_id in hq_set) else None})
+                          "oid": tile_id})
         owner_count[pid] = owner_count.get(pid, 0) + 1
     if i % 2000 == 0 and i > 0: print(f"  {i}/{len(tile_ids)} tiles → {len(owner_count)} players")
     time.sleep(DELAY)
@@ -265,6 +283,8 @@ for pid, count in sorted(owner_count.items(), key=lambda x: -x[1]):
         "me":      is_me,
         "color":   "#7F77DD" if is_me else pid_color(pid, count),
         "bcolor":  "#9F97FF" if is_me else pid_bcolor(pid),
+        "feed":    p.get("feedDeadline", 0),
+        "boost":   p.get("boostUntil", 0),
     })
 
 compact_tiles = []

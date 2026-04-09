@@ -65,6 +65,7 @@ async function fetchTurfLive(turfId) {
     hm: g.hm, bc: g.bc, ef: g.ef,
     total: g.hm + g.bc + g.ef,
     cooldown: cooldownRaw,
+    ownerId: fields.owner_id || null,
     cachedAt: now,
     live: true
   };

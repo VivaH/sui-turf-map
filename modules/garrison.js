@@ -165,8 +165,10 @@ function openGarrison(pid, e){
         blackmail_protection:'Blackmail prot', newbie_protection:'Newbie prot',
         attack_reset:'Atk reset'
       };
+      // feed_people is shown as activity indicator — exclude from cooldowns list
       let activeCd=[];
       for(const k in live.timers){
+        if(k==='feed_people') continue;
         const cd=rtCooldownRemaining(live.timers[k]);
         if(cd.ms>0) activeCd.push({key:k, label:cdLabels[k]||k, remaining:cd.label});
       }
@@ -177,6 +179,36 @@ function openGarrison(pid, e){
         const cd=rtCooldownRemaining(live.perks[pk]);
         if(cd.ms>0) activePerks.push({label:perkLabels[pk]||pk, remaining:cd.label});
       }
+      // ── Feed activity indicator (correct logic: feed_people is the deadline) ──
+      function rtFormatDuration(ms){
+        var totalMinutes=Math.floor(Math.abs(ms)/60000);
+        var days=Math.floor(totalMinutes/1440);
+        var hours=Math.floor((totalMinutes%1440)/60);
+        var minutes=totalMinutes%60;
+        return days+' days '+hours+' hours '+minutes+' minutes';
+      }
+      const feedDeadline=live.timers['feed_people']||0;
+      const nowMs=Date.now();
+      let activityHtml;
+      if(!feedDeadline){
+        activityHtml='<span style="color:#666">— No recent activity</span>';
+      } else if(feedDeadline>nowMs){
+        // Deadline not yet reached — player is active
+        const DAY=24*60*60*1000;
+        const lastFeedMs=nowMs-(feedDeadline-(3*DAY));
+        const nextFeedMs=feedDeadline-nowMs;
+        activityHtml='<span style="color:#888">Last fed: '+rtFormatDuration(lastFeedMs)+' ago · Next feed in: '+rtFormatDuration(nextFeedMs)+'</span>';
+      } else {
+        // Deadline missed — player skipped feed
+        const DAY=24*60*60*1000;
+        const daysOverdue=(nowMs-feedDeadline)/DAY;
+        if(daysOverdue<7){
+          activityHtml='<span style="color:#FAC775">⚠ Feed overdue ('+rtFormatDuration(nowMs-feedDeadline)+')</span>';
+        } else {
+          activityHtml='<span style="color:#E24B4A">⚠ Possibly inactive (last feed: '+rtFormatDuration(nowMs-(feedDeadline-(3*DAY)))+' ago)</span>';
+        }
+      }
+
       let html=
         '<div style="font-size:9px;color:#6fffa9;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">'+
         '⟳ Live data <span style="color:#444;font-size:8px;margin-left:6px">'+ts+'</span></div>'+
@@ -186,7 +218,8 @@ function openGarrison(pid, e){
         '<span style="color:#6fffa9">'+g.bc+'B</span> '+
         '<span style="color:#ff8483">'+g.ef+'E</span> '+
         '<span style="color:#555;font-size:9px"> · '+g.total+' total · '+g.recruits+' recruits</span>'+
-        '</div>';
+        '</div>'+
+        '<div style="font-size:10px;font-family:var(--font-mono);margin-bottom:6px">'+activityHtml+'</div>';
       if(activeCd.length){
         html+='<div style="font-size:9px;color:#888;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Cooldowns</div>'+
           '<div style="font-size:10px;font-family:var(--font-mono);display:flex;flex-wrap:wrap;gap:4px 12px;margin-bottom:5px">';

@@ -85,6 +85,7 @@ function showNeighborPopup(pid,sx,sy,clickedTile){
         <span style="text-align:center">${rndHtml}</span>
       </div>`;
     }
+    const _hasTurfId=!!(clickedTile&&clickedTile.oid);
     runAtkSim=function(defHM,defBC,defEF){
       if(defHM===0&&defBC===0&&defEF===0){
         atkEl.innerHTML=ATK_HEAD+'<div style="font-size:10px;color:#6fffa9;font-family:var(--font-mono)">No garrison — any army wins</div>';
@@ -115,8 +116,13 @@ function showNeighborPopup(pid,sx,sy,clickedTile){
         `<span style="color:${rndCol}">~${best.avgRounds.toFixed(0)}${gasWarn}</span>`
       );
     };
-    // Loading state — sim runs after live data resolves
-    atkEl.innerHTML=ATK_HEAD+tableHTML('…','…','…','<span style="color:#999">…</span>','<span style="color:#999">…</span>');
+    if(_hasTurfId){
+      // Show loading state — sim runs after live data resolves
+      atkEl.innerHTML=ATK_HEAD+tableHTML('…','…','…','<span style="color:#999">…</span>','<span style="color:#999">…</span>');
+    } else {
+      // No turfId — run sim immediately with snapshot data, no live fetch possible
+      setTimeout(()=>runAtkSim(tile.gH||0,tile.gB||0,tile.gE||0),0);
+    }
   } else if(atkEl){
     atkEl.style.display='none';
   }
@@ -158,6 +164,13 @@ function showNeighborPopup(pid,sx,sy,clickedTile){
       liveEl.innerHTML='<div style="padding:6px 14px;font-size:9px;color:#555;font-family:var(--font-mono)">Loading live data…</div>';
       fetchTurfLive(clickedTile.oid).then(function(live){
         if(popup.style.display==='none') return;
+        // ── Owner update: if turf changed hands since snapshot ──
+        if(live.ownerId && live.ownerId !== pid){
+          const liveOwner=players.find(pl=>pl.pid===live.ownerId);
+          const titleEl=document.getElementById('neighbor-title');
+          if(titleEl) titleEl.innerHTML=esc((liveOwner&&liveOwner.name)||'[unknown]')+
+            ' <span style="font-size:9px;color:#6fffa9;font-family:var(--font-mono);text-transform:none;letter-spacing:0">(live)</span>';
+        }
         const ts=new Date(live.cachedAt).toLocaleTimeString();
         const cdInfo=rtCooldownRemaining(live.cooldown);
         liveEl.innerHTML='<div style="padding:6px 14px 8px;background:#080d08;border-bottom:1px solid #1a1a1a">'+
@@ -178,10 +191,7 @@ function showNeighborPopup(pid,sx,sy,clickedTile){
       });
     } else {
       liveEl.innerHTML='';
-      if(runAtkSim) setTimeout(()=>runAtkSim(tile.gH||0,tile.gB||0,tile.gE||0),20);
     }
-  } else if(tile&&runAtkSim){
-    setTimeout(()=>runAtkSim(tile.gH||0,tile.gB||0,tile.gE||0),20);
   }
 }
 function closeNeighborPopup(){document.getElementById('neighbor-popup').style.display='none';}
