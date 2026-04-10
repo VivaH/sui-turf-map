@@ -154,12 +154,12 @@ function openGarrison(pid, e){
       const g=live.gangsters;
       const ts=new Date(live.cachedAt).toLocaleTimeString();
       const TIMER_LABELS={
-        boost_production:'Boost prod', attack_protection:'Atk protection',
-        blackmail_protection:'Blackmail prot', newbie_protection:'Newbie prot',
-        attack_reset:'Atk reset', raid_cooldown:'Raid cooldown', mission_cooldown:'Mission',
+        boost_production:'Boost production', attack_protection:'Attack protection',
+        blackmail_protection:'Blackmail protection', newbie_protection:'Newbie protection',
+        attack_reset:'Attack reset', raid_cooldown:'Raid', mission_cooldown:'Mission',
         safe_cooldown:'Safe', hire_scouts_cooldown:'Scouts', bullet_purchase:'Bullets',
         hospitalization:'Hospital', blackmail_attack_cooldown:'Blackmail',
-        blackmail_looted_cooldown:'Blackmail loot', capture_cooldown:'Capture cooldown'
+        blackmail_looted_cooldown:'Blackmail', capture_cooldown:'Capture'
       };
       const PERK_KEYS=['boost_production','attack_protection','blackmail_protection','newbie_protection','attack_reset'];
       const TIMER_KEYS=['raid_cooldown','mission_cooldown','safe_cooldown','hire_scouts_cooldown','bullet_purchase','hospitalization','blackmail_attack_cooldown','blackmail_looted_cooldown','capture_cooldown'];
