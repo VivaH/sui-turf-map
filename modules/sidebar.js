@@ -112,10 +112,10 @@ function renderPlayerList(){
       `<span class="ptiles">${p.tiles.toLocaleString('en')}</span>` +
       `<span class="plcd ${lcdCls}">${lcdTxt}</span>` +
       feedDot +
-      `<button class="p-gar-btn" onclick="openGarrison('${p.pid}',event)" title="Garrison overview">🛡</button>` +
-      `<button class="p-mark-btn ${friendCls}" onclick="toggleMark('${p.pid}','friend',event)" title="Mark as friend">♥</button>` +
-      `<button class="p-mark-btn ${enemyCls}" onclick="toggleMark('${p.pid}','enemy',event)" title="Mark as enemy">✕</button>` +
-      `<button class="p-mark-btn" onclick="copyPid('${p.pid}',event)" title="Copy profile ID">⧉</button>` +
+      `<button class="p-gar-btn" onclick="openGarrison('${p.pid}',event)" data-tip="Garrison overview">🛡</button>` +
+      `<button class="p-mark-btn ${friendCls}" onclick="toggleMark('${p.pid}','friend',event)" data-tip="Mark as friend">♥</button>` +
+      `<button class="p-mark-btn ${enemyCls}" onclick="toggleMark('${p.pid}','enemy',event)" data-tip="Mark as enemy">✕</button>` +
+      `<button class="p-mark-btn" onclick="copyPid('${p.pid}',event)" data-tip="Copy profile ID">⧉</button>` +
       `<button class="p-route-btn" onclick="onRouteBtn('${p.pid}',event)">${rl}</button>` +
       `</div>`;
   }

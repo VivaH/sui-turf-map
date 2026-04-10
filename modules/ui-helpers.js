@@ -73,7 +73,7 @@ function toggleCompact(btn){
   document.getElementById('player-list').classList.toggle('compact',compactMode);
   document.getElementById('right-panel').classList.toggle('compact',compactMode);
   btn.classList.toggle('on',compactMode);
-  btn.title=compactMode?'Normal view':'Compact view';
+  btn.dataset.tip=compactMode?'Normal view':'Compact view';
   // Shorten filter labels in compact mode to save space
   const fBtn=document.querySelector('.fb[onclick*="friends"]');
   const eBtn=document.querySelector('.fb[onclick*="enemies"]');

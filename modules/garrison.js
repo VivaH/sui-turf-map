@@ -153,39 +153,24 @@ function openGarrison(pid, e){
       if(!document.getElementById('garrison-modal').classList.contains('open')) return;
       const g=live.gangsters;
       const ts=new Date(live.cachedAt).toLocaleTimeString();
-      const cdLabels={
-        feed_people:'Feed people', raid_cooldown:'Raid', mission_cooldown:'Mission',
-        safe_cooldown:'Safe', hire_scouts_cooldown:'Scouts', bullet_purchase:'Bullets',
-        hospitalization:'Hospital', blackmail_attack_cooldown:'Blackmail atk',
-        blackmail_looted_cooldown:'Blackmail loot', attack_protection:'Atk protection',
-        boost_production:'Boost prod'
-      };
-      const perkLabels={
+      const TIMER_LABELS={
         boost_production:'Boost prod', attack_protection:'Atk protection',
         blackmail_protection:'Blackmail prot', newbie_protection:'Newbie prot',
-        attack_reset:'Atk reset'
+        attack_reset:'Atk reset', raid_cooldown:'Raid', mission_cooldown:'Mission',
+        safe_cooldown:'Safe', hire_scouts_cooldown:'Scouts', bullet_purchase:'Bullets',
+        hospitalization:'Hospital', blackmail_attack_cooldown:'Blackmail atk',
+        blackmail_looted_cooldown:'Blackmail loot', capture_cooldown:'Capture'
       };
-      // feed_people is shown as activity indicator — exclude from cooldowns list
-      let activeCd=[];
-      for(const k in live.timers){
-        if(k==='feed_people') continue;
-        const cd=rtCooldownRemaining(live.timers[k]);
-        if(cd.ms>0) activeCd.push({key:k, label:cdLabels[k]||k, remaining:cd.label});
-      }
-      activeCd.sort((a,b)=>live.timers[a.key]-live.timers[b.key]);
-      activeCd=activeCd.slice(0,5);
-      const activePerks=[];
-      for(const pk in live.perks){
-        const cd=rtCooldownRemaining(live.perks[pk]);
-        if(cd.ms>0) activePerks.push({label:perkLabels[pk]||pk, remaining:cd.label});
-      }
+      const PERK_KEYS=['boost_production','attack_protection','blackmail_protection','newbie_protection','attack_reset'];
+      const TIMER_KEYS=['raid_cooldown','mission_cooldown','safe_cooldown','hire_scouts_cooldown','bullet_purchase','hospitalization','blackmail_attack_cooldown','blackmail_looted_cooldown','capture_cooldown'];
       // ── Feed activity indicator (correct logic: feed_people is the deadline) ──
       function rtFormatDuration(ms){
         var totalMinutes=Math.floor(Math.abs(ms)/60000);
         var days=Math.floor(totalMinutes/1440);
         var hours=Math.floor((totalMinutes%1440)/60);
         var minutes=totalMinutes%60;
-        return days+' days '+hours+' hours '+minutes+' minutes';
+        if(days>0) return days+' days '+hours+' hours '+minutes+' minutes';
+        return hours+' hours '+minutes+' minutes';
       }
       const feedDeadline=live.timers['feed_people']||0;
       const nowMs=Date.now();
@@ -220,19 +205,28 @@ function openGarrison(pid, e){
         '<span style="color:#555;font-size:9px"> · '+g.total+' total · '+g.recruits+' recruits</span>'+
         '</div>'+
         '<div style="font-size:10px;font-family:var(--font-mono);margin-bottom:6px">'+activityHtml+'</div>';
-      if(activeCd.length){
-        html+='<div style="font-size:9px;color:#888;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Cooldowns</div>'+
-          '<div style="font-size:10px;font-family:var(--font-mono);display:flex;flex-wrap:wrap;gap:4px 12px;margin-bottom:5px">';
-        for(const cd of activeCd)
-          html+='<span><span style="color:#888">'+cd.label+'</span> <span style="color:#FAC775">'+cd.remaining+'</span></span>';
-        html+='</div>';
-      }
-      if(activePerks.length){
-        html+='<div style="font-size:9px;color:#888;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Perks</div>'+
-          '<div style="font-size:10px;font-family:var(--font-mono);display:flex;flex-wrap:wrap;gap:4px 12px">';
-        for(const pk of activePerks)
-          html+='<span><span style="color:#888">'+pk.label+'</span> <span style="color:#89c6ff">'+pk.remaining+'</span></span>';
-        html+='</div>';
+      const timerLines=[];
+      PERK_KEYS.forEach(function(key){
+        const perkUntil=(live.perks&&live.perks[key])||0;
+        const timerUntil=(live.timers&&live.timers[key])||0;
+        const lbl=TIMER_LABELS[key]||key;
+        if(perkUntil>nowMs){
+          timerLines.push('<span><span style="color:#888">'+lbl+'</span> <span style="color:#89c6ff">active '+rtFormatDuration(perkUntil-nowMs)+'</span></span>');
+        } else if(timerUntil>nowMs){
+          timerLines.push('<span><span style="color:#888">'+lbl+'</span> <span style="color:#FAC775">cooldown '+rtFormatDuration(timerUntil-nowMs)+'</span></span>');
+        }
+      });
+      TIMER_KEYS.forEach(function(key){
+        const timerUntil=(live.timers&&live.timers[key])||0;
+        if(timerUntil>nowMs){
+          const lbl=TIMER_LABELS[key]||key;
+          timerLines.push('<span><span style="color:#888">'+lbl+'</span> <span style="color:#FAC775">'+rtFormatDuration(timerUntil-nowMs)+'</span></span>');
+        }
+      });
+      if(timerLines.length){
+        html+='<div style="font-size:9px;color:#888;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Timers</div>'+
+          '<div style="font-size:10px;font-family:var(--font-mono);display:flex;flex-wrap:wrap;gap:4px 12px">'+
+          timerLines.join('')+'</div>';
       }
       liveSec.innerHTML=html;
       liveSec.style.display='block';

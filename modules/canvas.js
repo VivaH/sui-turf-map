@@ -180,11 +180,28 @@ function showNeighborPopup(pid,sx,sy,clickedTile){
           '<span style="color:#6fffa9">'+live.bc+'B</span>'+
           '<span style="color:#ff8483">'+live.ef+'E</span>'+
           '<span style="color:#555;font-size:9px">= '+live.total+'</span>'+
-          (cdInfo.label!=='—'?'<span style="color:#FAC775;font-size:9px;margin-left:4px">cd '+cdInfo.label+'</span>':'')+
           '</div>'+
           '<div style="font-size:8px;color:#444;font-family:var(--font-mono);margin-top:3px">'+ts+'</div>'+
           '</div>';
         if(runAtkSim) setTimeout(()=>runAtkSim(live.hm,live.bc,live.ef),0);
+        // Second fetch: attack shield from owner player data
+        if(live.ownerId){
+          fetchPlayerLive(live.ownerId).then(function(playerData){
+            if(popup.style.display==='none') return;
+            var shieldUntil=(playerData.timers&&playerData.timers['attack_protection'])||0;
+            var shieldCd=rtCooldownRemaining(shieldUntil);
+            var lines=[];
+            if(cdInfo.label!=='—') lines.push('<span style="color:#888">Raid cd</span> <span style="color:#FAC775">'+cdInfo.label+'</span>');
+            if(shieldCd.label!=='—') lines.push('<span style="color:#888">Attack shield</span> <span style="color:#FAC775">'+shieldCd.label+'</span>');
+            if(lines.length){
+              var cdDiv=document.createElement('div');
+              cdDiv.style.cssText='padding:4px 14px 6px;background:#080d08;border-bottom:1px solid #1a1a1a;font-family:var(--font-mono)';
+              cdDiv.innerHTML='<div style="font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Cooldowns</div>'+
+                '<div style="font-size:10px;display:flex;flex-wrap:wrap;gap:4px 12px">'+lines.join('')+'</div>';
+              liveEl.appendChild(cdDiv);
+            }
+          }).catch(function(){});
+        }
       }).catch(function(){
         liveEl.innerHTML='';
         if(runAtkSim) setTimeout(()=>runAtkSim(tile.gH||0,tile.gB||0,tile.gE||0),0);
