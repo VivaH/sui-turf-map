@@ -23,8 +23,8 @@ RPC_ENDPOINTS = [
 ]
 
 BATCH      = 50
-DELAY      = 0.2
-DELAY_PAGE = 0.3
+DELAY      = 0.1
+DELAY_PAGE = 0.15
 
 # ── RPC ────────────────────────────────────────────────────────────────────────
 rpc_index = 0
@@ -689,7 +689,7 @@ SCALE = 18446744073709551616  # 2^64
 needs_backfill = [
     r for r in existing_raids
     if (r.get("xp", 0) == 0 or "is_capture" not in r) and r.get("digest")
-]
+][-50:]  # cap at 50 to avoid long backfill runs
 if needs_backfill:
     print(f"  Backfilling XP/capture flag for {len(needs_backfill)} entries...")
     backfilled_xp = 0
@@ -1144,7 +1144,7 @@ for event_type in ACTIVITY_EVENT_TYPES:
     found  = 0
     stop   = False
     try:
-        while pages < 20 and not stop:
+        while pages < 8 and not stop:
             params = [{"MoveEventType": event_type}, cursor, 50, True]
             result = rpc("suix_queryEvents", params)
             events = result.get("data", [])
