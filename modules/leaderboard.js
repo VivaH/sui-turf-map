@@ -5,10 +5,12 @@ let _lbPeriod = '24h';
 
 function lbSetPeriod(p){
   _lbPeriod = p;
-  document.getElementById('lb-period-24h').style.borderColor = p==='24h'?'var(--v-gold)':'#333';
-  document.getElementById('lb-period-24h').style.color       = p==='24h'?'var(--v-gold)':'#666';
-  document.getElementById('lb-period-7d').style.borderColor  = p==='7d'?'var(--v-gold)':'#333';
-  document.getElementById('lb-period-7d').style.color        = p==='7d'?'var(--v-gold)':'#666';
+  ['24h','7d','cw'].forEach(id=>{
+    const btn=document.getElementById('lb-period-'+id);
+    if(!btn) return;
+    btn.style.borderColor = p===id ? 'var(--v-gold)' : '#333';
+    btn.style.color       = p===id ? 'var(--v-gold)' : '#666';
+  });
   renderLeaderboard();
 }
 
@@ -25,6 +27,41 @@ function closeLeaderboard(){
 function renderLeaderboard(){
   const el=document.getElementById('lb-list');
   el.innerHTML='<div style="padding:1rem;color:#666;font-size:11px">Loading...</div>';
+  const header=document.getElementById('lb-header');
+
+  // ── Cash/Weapons tab ────────────────────────────────────────────────────────
+  if(_lbPeriod==='cw'){
+    document.getElementById('lb-subtitle').textContent='Top 50 players by cash balance · snapshot data';
+    if(header){
+      header.style.gridTemplateColumns='32px 1fr 80px 80px';
+      header.innerHTML='<span>#</span><span>Player</span><span style="text-align:right">💰 Cash</span><span style="text-align:right">⚔️ Weapons</span>';
+    }
+    const sorted=[...players].sort((a,b)=>(b.cash||0)-(a.cash||0)).slice(0,50);
+    const fmtNum=v=>Math.round(v||0).toLocaleString('en');
+    el.innerHTML=sorted.map((p,i)=>{
+      const rank=i+1;
+      const isMe=MY_IDS.has(p.pid);
+      const dotCol=markColor(p.pid,p.color||'#666');
+      const rankCol=rank<=3?'#FAC775':rank<=10?'#aaa':'#555';
+      const inactive=p.inactive?'<span style="color:#555;font-size:8px"> INACT</span>':'';
+      return `<div class="lb-row" onclick="closeLeaderboard();showMiniProfile(event,'${p.pid}')" style="display:grid;grid-template-columns:32px 1fr 80px 80px;padding:6px 14px;border-bottom:1px solid #111;cursor:pointer;${isMe?'background:#0a0a1a':''}">
+        <span style="color:${rankCol};font-size:10px">${rank}</span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span style="width:8px;height:8px;border-radius:1px;background:${dotCol};flex-shrink:0;display:inline-block"></span>
+          <span style="font-size:11px;color:${isMe?'#FAC775':'#ccc'}">${esc(p.name||'[unknown]')}${inactive}</span>
+        </span>
+        <span style="text-align:right;font-size:11px;color:#FAC775">${fmtNum(p.cash)}</span>
+        <span style="text-align:right;font-size:11px;color:#e07050">${fmtNum(p.weapons)}</span>
+      </div>`;
+    }).join('');
+    return;
+  }
+
+  // ── Tile trend tabs (24h / 7d) — restore default header ────────────────────
+  if(header){
+    header.style.gridTemplateColumns='32px 1fr 52px 52px 52px';
+    header.innerHTML='<span>#</span><span>Player</span><span style="text-align:right">Turfs</span><span style="text-align:right">Change</span><span style="text-align:right">Trend</span>';
+  }
 
   // Build previous tile counts using correct data structures:
   // playerHistory: {snapshots: [label,...], players: {pid: [count per snapshot]}}

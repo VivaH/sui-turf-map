@@ -225,11 +225,19 @@ function renderTopMovers(){
   const recentRaidFeed=raids.slice(-3).reverse();
   function raidAge(ts){const h=Math.round((Date.now()-new Date(ts))/3600000);return h<1?'just now':h<24?h+'h ago':Math.floor(h/24)+'d ago';}
 
+  // Top 3 richest players by cash (snapshot data)
+  const richTop3=[...players].filter(p=>p.cash>0).sort((a,b)=>(b.cash||0)-(a.cash||0)).slice(0,3);
+  const richStr=richTop3.length
+    ?richTop3.map((p,i)=>`<span class="tk-gold">${i+1}. ${esc(p.name||'?')} ${Math.round(p.cash||0).toLocaleString('en')}</span>`).join(' | ')
+    :null;
+
   const sep='<span class="tk-sep">◆</span>';
 
   const items=[
     // Map stats
     `🗺 <span class="tk-blue">${totalTiles.toLocaleString('en')}</span> turfs claimed · <span class="tk-blue">${players.length.toLocaleString('en')}</span> players on the map`,
+    // Richest players
+    richStr?`💰 Richest: ${richStr}`:null,
     // Battle intensity
     battles>50?`🔫 <span class="tk-red">${battles} turfs</span> changed hands in 24h — the streets are hot`:
     battles>10?`⚔ <span class="tk-gold">${battles} turf battles</span> fought in the last 24h`:

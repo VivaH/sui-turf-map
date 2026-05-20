@@ -14,6 +14,7 @@ PLAYERS_REGISTRY = "0x84a4a83842e92d8091563ae7a033797ad5182baca84de9f89573cb5b37
 NULL_ID          = "0x" + "0" * 64
 MAX_SNAPSHOTS    = 150  # keep last 150 snapshots (~30 days at 4x/day, with room for manual snapshots)
 SNAPSHOTS_DIR    = "snapshots"
+SCALE            = 18446744073709551616  # 2^64 fixed-point scale used for resources and raid values
 
 RPC_ENDPOINTS = [
     "https://fullnode.mainnet.sui.io:443",
@@ -160,6 +161,56 @@ named = sum(1 for p in profiles.values() if p["name"])
 print(f"  Profiles: {len(profiles)} ({named} with name)")
 hq_set = {p["hqTile"] for p in profiles.values() if p.get("hqTile")}
 
+# ── STEP 2.5: Cash/Weapons balances ──────────────────────────────────────────
+# Phase 1: discover dynamic-field object IDs for "cash" and "weapon" per player.
+# suix_getDynamicFields returns field metadata (incl objectId) per parent object.
+# We collect those IDs, then batch-fetch the actual field objects with multiGet.
+print("Step 2.5/4: Fetching cash/weapons balances...")
+profile_pids = list(profiles.keys())
+resource_field_oids = []  # list of (pid, field_name, objectId)
+for i, pid in enumerate(profile_pids):
+    try:
+        res = rpc("suix_getDynamicFields", [pid, None, 10])
+        for item in (res.get("data") or []):
+            name = item.get("name") or {}
+            if name.get("type") == "0x1::string::String" and name.get("value") in ("cash", "weapon"):
+                oid = item.get("objectId")
+                if oid:
+                    resource_field_oids.append((pid, name["value"], oid))
+    except Exception:
+        pass
+    if i % 100 == 0 and i > 0:
+        print(f"  {i}/{len(profile_pids)} players scanned for resource fields")
+    time.sleep(DELAY)
+print(f"  Resource fields found: {len(resource_field_oids)} across {len({x[0] for x in resource_field_oids})} players")
+
+# Phase 2: batch-fetch all resource field objects
+pid_cash   = {}
+pid_weapon = {}
+for i in range(0, len(resource_field_oids), BATCH):
+    batch = resource_field_oids[i:i+BATCH]
+    oids  = [x[2] for x in batch]
+    try:
+        objs = rpc("sui_multiGetObjects", [oids, {"showContent": True}])
+        if not isinstance(objs, list):
+            continue
+        for j, obj in enumerate(objs):
+            if not obj or obj.get("error"):
+                continue
+            pid, field_name, _ = batch[j]
+            fields = ((obj.get("data") or {}).get("content") or {}).get("fields", {})
+            inner  = fields.get("value")
+            amount = inner.get("fields", {}).get("amount", 0) if isinstance(inner, dict) else 0
+            scaled = round(int(amount or 0) / SCALE, 2)
+            if field_name == "cash":
+                pid_cash[pid] = scaled
+            else:
+                pid_weapon[pid] = scaled
+    except Exception:
+        pass
+    time.sleep(DELAY)
+print(f"  Cash: {len(pid_cash)} players · Weapons: {len(pid_weapon)} players")
+
 # ── STEP 3: TurfSystem ────────────────────────────────────────────────────────
 print("Step 3/4: Loading TurfSystem...")
 ts = rpc("sui_getObject", [TURF_SYSTEM, {"showContent": True}])
@@ -285,6 +336,8 @@ for pid, count in sorted(owner_count.items(), key=lambda x: -x[1]):
         "bcolor":  "#9F97FF" if is_me else pid_bcolor(pid),
         "feed":    p.get("feedDeadline", 0),
         "boost":   p.get("boostUntil", 0),
+        "cash":    pid_cash.get(pid, 0),
+        "weapons": pid_weapon.get(pid, 0),
     })
 
 compact_tiles = []
@@ -684,7 +737,6 @@ known_digests = {r["digest"] for r in existing_raids if r.get("digest")}
 # For existing entries where xp=0, fetch the TX events directly to retrieve XP
 # from SimulationResultEvent (which has raided_resources.xp).
 RAID_SEARCH_TYPE = "0x63081c5dd824a49289b6557d9f9bcf8613fe801e89dbad728616348a58b4b40a::ibattle::SimulationResultEvent"
-SCALE = 18446744073709551616  # 2^64
 
 needs_backfill = [
     r for r in existing_raids

@@ -1,4 +1,4 @@
-// ── MODULE: realtime.js ── Vendetta World Map v4.06 ──────────────────────────
+// ── MODULE: realtime.js ── Vendetta World Map v4.12 ──────────────────────────
 
 // ── CACHE ─────────────────────────────────────────────────────────────────────
 var _rtCache = {}; // key: objectId, value: {data, ts}
@@ -70,6 +70,55 @@ async function fetchTurfLive(turfId) {
     live: true
   };
   _rtCache[turfId] = {data: result, ts: now};
+  return result;
+}
+
+// ── FETCH PLAYER RESOURCES LIVE ──────────────────────────────────────────────
+// Fetches live cash and weapons balances from the player profile's dynamic fields.
+// Returns: {cash: number, weapons: number, cachedAt: number}
+// Uses BigInt to safely divide u128 values by 2^64.
+var _rtResCache = {};
+
+async function fetchPlayerResources(profileId) {
+  if (!profileId) throw new Error('fetchPlayerResources: no profileId');
+  var now = Date.now();
+  var key = profileId + '_res';
+  if (_rtResCache[key] && (now - _rtResCache[key].ts) < RT_CACHE_TTL) {
+    return _rtResCache[key].data;
+  }
+  var SCALE = BigInt('18446744073709551616'); // 2^64
+
+  async function fetchField(fieldValue) {
+    var resp = await fetch('https://fullnode.mainnet.sui.io', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        jsonrpc: '2.0', id: 1,
+        method: 'suix_getDynamicFieldObject',
+        params: [profileId, {type: '0x1::string::String', value: fieldValue}]
+      })
+    });
+    if (!resp.ok) return 0;
+    var d = await resp.json();
+    if (d.error || !d.result) return 0;
+    var fields = d.result.data && d.result.data.content && d.result.data.content.fields;
+    if (!fields) return 0;
+    var inner = fields.value;
+    var amountStr = inner && inner.fields && inner.fields.amount;
+    if (!amountStr) return 0;
+    try {
+      var raw = BigInt(amountStr);
+      // Multiply by 100 before dividing to preserve 2 decimal places
+      return Number(raw * 100n / SCALE) / 100;
+    } catch(e) { return 0; }
+  }
+
+  var cash = 0, weapons = 0;
+  try { cash    = await fetchField('cash');   } catch(e) {}
+  try { weapons = await fetchField('weapon'); } catch(e) {}
+
+  var result = {cash: cash, weapons: weapons, cachedAt: now};
+  _rtResCache[key] = {data: result, ts: now};
   return result;
 }
 

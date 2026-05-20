@@ -149,7 +149,8 @@ function openGarrison(pid, e){
   if(liveSec){
     liveSec.style.display='none';
     liveSec.innerHTML='';
-    fetchPlayerLive(pid).then(function(live){
+    Promise.all([fetchPlayerLive(pid), fetchPlayerResources(pid)]).then(function(results){
+      const live=results[0], res=results[1];
       if(!document.getElementById('garrison-modal').classList.contains('open')) return;
       const g=live.gangsters;
       const ts=new Date(live.cachedAt).toLocaleTimeString();
@@ -229,6 +230,13 @@ function openGarrison(pid, e){
           '<div style="font-size:10px;font-family:var(--font-mono);display:flex;flex-wrap:wrap;gap:4px 12px">'+
           timerLines.join('')+'</div>';
       }
+      const fmtRes=v=>Math.round(v||0).toLocaleString('en');
+      html+=
+        '<div style="font-size:10px;font-family:var(--font-mono);margin-top:6px">'+
+        '<span style="color:#888;font-size:9px;text-transform:uppercase;margin-right:6px">Resources</span>'+
+        '<span style="color:#FAC775">💰 '+fmtRes(res.cash)+'</span>'+
+        '<span style="color:#e07050;margin-left:10px">⚔️ '+fmtRes(res.weapons)+'</span>'+
+        '</div>';
       liveSec.innerHTML=html;
       liveSec.style.display='block';
     }).catch(function(){ /* silently skip */ });
